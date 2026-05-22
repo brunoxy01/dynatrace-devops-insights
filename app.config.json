@@ -2,13 +2,15 @@
   "$schema": "./.dt-app/app.config.schema.json",
   "environmentUrl": "https://bwm98081.apps.dynatrace.com/",
   "app": {
-    "name": "insights",
+    "name": "DevOps Insights",
     "version": "0.0.0",
-    "description": "A starting project with routing, fetching data, and charting",
-    "id": "my.insights",
+    "description": "Métricas DevOps: commits, PRs, builds, deploys e branch strategy",
+    "id": "my.devops.insights",
     "scopes": [
-      { "name": "storage:logs:read", "comment": "default template" },
-      { "name": "storage:buckets:read", "comment": "default template" }
+      { "name": "storage:logs:read", "comment": "Leitura de logs do Grail" },
+      { "name": "storage:buckets:read", "comment": "Leitura de buckets do Grail" },
+      { "name": "storage:bizevents:read", "comment": "Leitura de bizevents para métricas DevOps" },
+      { "name": "storage:events:read", "comment": "Leitura de SDLC events do CI/CD pipeline" }
     ]
   }
 }

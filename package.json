@@ -1,7 +1,7 @@
 {
-  "name": "insights",
+  "name": "devops-insights",
   "version": "0.0.0",
-  "description": "A starting project with routing, fetching data, and charting",
+  "description": "DevOps Insights: commits, PRs, builds, deploys e branch strategy por desenvolvedor",
   "scripts": {
     "build": "dt-app build",
     "start": "dt-app dev",
