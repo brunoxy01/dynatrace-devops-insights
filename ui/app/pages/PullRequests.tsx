@@ -5,10 +5,11 @@ import { DataTable } from "@dynatrace/strato-components/tables";
 import type { DataTableColumnDef } from "@dynatrace/strato-components/tables";
 import { Button } from "@dynatrace/strato-components/buttons";
 import { showToast } from "@dynatrace/strato-components/notifications";
-import { filterByProviders, pullRequests } from "../data/mockData";
+import { pullRequests, repositories } from "../data/mockData";
+import { filterPullRequests, filterRepositories } from "../data/applyFilters";
 import type { PullRequest } from "../data/types";
 import { PROVIDERS } from "../data/types";
-import { useProviderFilter } from "../state/ProviderFilterContext";
+import { useFilters } from "../state/FilterContext";
 
 const providerLabel = (id: PullRequest["provider"]): string =>
   PROVIDERS.find((p) => p.id === id)?.label ?? id;
@@ -25,12 +26,12 @@ function triggerApproveWorkflow(pr: PullRequest): void {
 }
 
 export const PullRequests: React.FC = () => {
-  const { selected } = useProviderFilter();
+  const { applied } = useFilters();
 
-  const rows = useMemo(
-    () => filterByProviders(pullRequests, selected).filter((p) => p.state === "open"),
-    [selected],
-  );
+  const rows = useMemo(() => {
+    const repoSet = new Set(filterRepositories(repositories, applied).map((r) => r.fullName));
+    return filterPullRequests(pullRequests, applied, repoSet).filter((p) => p.state === "open");
+  }, [applied]);
 
   const columns = useMemo<DataTableColumnDef<PullRequest>[]>(
     () => [

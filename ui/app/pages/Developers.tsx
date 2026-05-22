@@ -3,21 +3,22 @@ import { Flex } from "@dynatrace/strato-components/layouts";
 import { Heading, Paragraph } from "@dynatrace/strato-components/typography";
 import { DataTable } from "@dynatrace/strato-components/tables";
 import type { DataTableColumnDef } from "@dynatrace/strato-components/tables";
-import { developers, filterByProviders } from "../data/mockData";
+import { developers } from "../data/mockData";
+import { filterDevelopers } from "../data/applyFilters";
 import type { Developer } from "../data/types";
 import { PROVIDERS } from "../data/types";
-import { useProviderFilter } from "../state/ProviderFilterContext";
+import { useFilters } from "../state/FilterContext";
 
 const providerLabel = (id: Developer["provider"]): string =>
   PROVIDERS.find((p) => p.id === id)?.label ?? id;
 
 export const Developers: React.FC = () => {
-  const { selected } = useProviderFilter();
+  const { applied } = useFilters();
 
   const rows = useMemo(() => {
-    const filtered = filterByProviders(developers, selected);
+    const filtered = filterDevelopers(developers, applied);
     return [...filtered].sort((a, b) => b.commitsLast30d - a.commitsLast30d);
-  }, [selected]);
+  }, [applied]);
 
   const columns = useMemo<DataTableColumnDef<Developer>[]>(
     () => [

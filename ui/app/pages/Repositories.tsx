@@ -4,11 +4,11 @@ import { Heading, Paragraph } from "@dynatrace/strato-components/typography";
 import { DataTable } from "@dynatrace/strato-components/tables";
 import type { DataTableColumnDef } from "@dynatrace/strato-components/tables";
 import { ExternalLink } from "@dynatrace/strato-components/typography";
-import { filterByProviders, repositories } from "../data/mockData";
+import { repositories } from "../data/mockData";
+import { filterRepositories } from "../data/applyFilters";
 import type { Repository } from "../data/types";
 import { PROVIDERS } from "../data/types";
-import { useProviderFilter } from "../state/ProviderFilterContext";
-import { useStrategyFilter } from "../state/StrategyFilterContext";
+import { useFilters } from "../state/FilterContext";
 import { inferBranchStrategy } from "../data/branchStrategy";
 import { BranchStrategyBadge } from "../components/BranchStrategyBadge";
 
@@ -16,14 +16,9 @@ const providerLabel = (id: Repository["provider"]): string =>
   PROVIDERS.find((p) => p.id === id)?.label ?? id;
 
 export const Repositories: React.FC = () => {
-  const { selected } = useProviderFilter();
-  const { selected: selectedStrategies } = useStrategyFilter();
+  const { applied } = useFilters();
 
-  const rows = useMemo(() => {
-    const filtered = filterByProviders(repositories, selected);
-    if (selectedStrategies.length === 0) return filtered;
-    return filtered.filter((r) => selectedStrategies.includes(inferBranchStrategy(r)));
-  }, [selected, selectedStrategies]);
+  const rows = useMemo(() => filterRepositories(repositories, applied), [applied]);
 
   const columns = useMemo<DataTableColumnDef<Repository>[]>(
     () => [

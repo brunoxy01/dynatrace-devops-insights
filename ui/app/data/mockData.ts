@@ -379,6 +379,19 @@ export function filterByProviders<T extends { provider: Provider }>(
   return items.filter((i) => selected.includes(i.provider));
 }
 
+export function filterByList<T>(
+  items: T[],
+  selected: string[] | undefined,
+  getKey: (item: T) => string | undefined,
+): T[] {
+  if (!selected || selected.length === 0) return items;
+  return items.filter((i) => {
+    const k = getKey(i);
+    if (!k) return false;
+    return selected.includes(k);
+  });
+}
+
 export function filterByTimeRange<T extends { startedAt?: string; timestamp?: string; createdAt?: string }>(
   items: T[],
   fromIso: string,

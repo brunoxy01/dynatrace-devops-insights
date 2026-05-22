@@ -9,8 +9,7 @@ import { Repositories } from "./pages/Repositories";
 import { PullRequests } from "./pages/PullRequests";
 import { Builds } from "./pages/Builds";
 import { ReleaseComparison } from "./pages/ReleaseComparison";
-import { ProviderFilterProvider } from "./state/ProviderFilterContext";
-import { StrategyFilterProvider } from "./state/StrategyFilterContext";
+import { FilterProvider } from "./state/FilterContext";
 import { TimeRangeProvider } from "./state/TimeRangeContext";
 import { ToastContainer } from "@dynatrace/strato-components/notifications";
 import "./styles/animations.css";
@@ -18,26 +17,24 @@ import "./styles/animations.css";
 export const App = () => {
   return (
     <TimeRangeProvider>
-      <ProviderFilterProvider>
-        <StrategyFilterProvider>
-          <Page>
-            <Page.Header>
-              <Header />
-            </Page.Header>
-            <Page.Main>
-              <FilterBar />
-              <Routes>
-                <Route path="/" element={<Overview />} />
-                <Route path="/releases" element={<ReleaseComparison />} />
-                <Route path="/developers" element={<Developers />} />
-                <Route path="/repositories" element={<Repositories />} />
-                <Route path="/pull-requests" element={<PullRequests />} />
-                <Route path="/builds" element={<Builds />} />
-              </Routes>
-            </Page.Main>
-          </Page>
-        </StrategyFilterProvider>
-      </ProviderFilterProvider>
+      <FilterProvider>
+        <Page>
+          <Page.Header>
+            <Header />
+          </Page.Header>
+          <Page.Main>
+            <FilterBar />
+            <Routes>
+              <Route path="/" element={<Overview />} />
+              <Route path="/releases" element={<ReleaseComparison />} />
+              <Route path="/developers" element={<Developers />} />
+              <Route path="/repositories" element={<Repositories />} />
+              <Route path="/pull-requests" element={<PullRequests />} />
+              <Route path="/builds" element={<Builds />} />
+            </Routes>
+          </Page.Main>
+        </Page>
+      </FilterProvider>
       <ToastContainer />
     </TimeRangeProvider>
   );

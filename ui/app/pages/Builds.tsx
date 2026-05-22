@@ -4,9 +4,10 @@ import { Heading, Paragraph, Text } from "@dynatrace/strato-components/typograph
 import { Chip } from "@dynatrace/strato-components/content";
 import { Button } from "@dynatrace/strato-components/buttons";
 import { KpiCard } from "../components/KpiCard";
-import { filterByProviders, filterByTimeRange } from "../data/mockData";
+import { filterByTimeRange, repositories } from "../data/mockData";
+import { filterBuilds, filterRepositories } from "../data/applyFilters";
 import { PROVIDERS, type Build } from "../data/types";
-import { useProviderFilter } from "../state/ProviderFilterContext";
+import { useFilters } from "../state/FilterContext";
 import { useTimeRange } from "../state/TimeRangeContext";
 import { useSDLCBuilds } from "../hooks/useSDLCBuilds";
 import { APP_IDS, navigateToApp } from "../utils/navigation";
@@ -73,14 +74,14 @@ const BuildCard: React.FC<{ build: Build }> = ({ build }) => {
 };
 
 export const Builds: React.FC = () => {
-  const { selected } = useProviderFilter();
+  const { applied } = useFilters();
   const { fromIso, toIso, range } = useTimeRange();
   const { data, source, isLoading } = useSDLCBuilds();
 
-  const rows = useMemo(
-    () => filterByTimeRange(filterByProviders(data, selected), fromIso, toIso),
-    [selected, data, fromIso, toIso],
-  );
+  const rows = useMemo(() => {
+    const repoSet = new Set(filterRepositories(repositories, applied).map((r) => r.fullName));
+    return filterByTimeRange(filterBuilds(data, applied, repoSet), fromIso, toIso);
+  }, [applied, data, fromIso, toIso]);
 
   const stats = useMemo(() => {
     const total = rows.length;

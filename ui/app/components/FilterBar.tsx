@@ -1,74 +1,123 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { Flex } from "@dynatrace/strato-components/layouts";
 import { Button } from "@dynatrace/strato-components/buttons";
-import { Text } from "@dynatrace/strato-components/typography";
-import { BRANCH_STRATEGIES, PROVIDERS, type BranchStrategy, type Provider } from "../data/types";
-import { useProviderFilter } from "../state/ProviderFilterContext";
-import { useStrategyFilter } from "../state/StrategyFilterContext";
+import { FilterField } from "@dynatrace/strato-components/filters";
+import type { FilterFieldTree, FilterFieldValidatorMap } from "@dynatrace/strato-components/filters";
+import { repositories } from "../data/mockData";
+import { useFilters } from "../state/FilterContext";
+import { useTimeRange } from "../state/TimeRangeContext";
 import { TimeRangeFilter } from "./TimeRangeFilter";
 
+const PROVIDER_VALUES = ["github", "gitlab", "azure-devops"];
+const STRATEGY_VALUES = ["gitflow", "trunk-based", "none"];
+const ENV_VALUES = ["production", "staging", "dev"];
+
 export const FilterBar: React.FC = () => {
-  const {
-    isActive: isProviderActive,
-    toggle: toggleProvider,
-    clear: clearProvider,
-    selected: selectedProviders,
-  } = useProviderFilter();
-  const {
-    isActive: isStrategyActive,
-    toggle: toggleStrategy,
-    clear: clearStrategy,
-    selected: selectedStrategies,
-  } = useStrategyFilter();
+  const { rawValue, setRawValue, apply, reset } = useFilters();
+  const { setRange, range } = useTimeRange();
+  const [pendingTree, setPendingTree] = useState<FilterFieldTree | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
+
+  const validatorMap = useMemo<FilterFieldValidatorMap>(() => {
+    const repoNames = repositories.map((r) => r.fullName);
+    const appNames = [...new Set(repositories.map((r) => r.application))];
+    return {
+      keyPredicates: [
+        {
+          key: "provider",
+          valueType: "String",
+          valuePredicate: PROVIDER_VALUES,
+          details: "Git provider",
+        },
+        {
+          key: "strategy",
+          valueType: "String",
+          valuePredicate: STRATEGY_VALUES,
+          details: "Branch strategy",
+        },
+        {
+          key: "repository",
+          valueType: "String",
+          valuePredicate: repoNames,
+          details: "Full name owner/repo",
+        },
+        {
+          key: "application",
+          valueType: "String",
+          valuePredicate: appNames,
+          details: "Service application name",
+        },
+        {
+          key: "environment",
+          valueType: "String",
+          valuePredicate: ENV_VALUES,
+          details: "Deployment environment",
+        },
+        {
+          key: "author",
+          valueType: "String",
+          details: "Commit / PR author",
+        },
+        {
+          key: "branch",
+          valueType: "String",
+          details: "Git branch name",
+        },
+      ],
+      exhaustive: false,
+    };
+  }, []);
+
+  const handleApply = (): void => {
+    if (pendingTree) apply(pendingTree);
+  };
+
+  const handleClear = (): void => {
+    setRawValue("");
+    reset();
+    setPendingTree(null);
+  };
+
+  const handleReload = (): void => {
+    setReloadTick((t) => t + 1);
+    if (pendingTree) apply(pendingTree);
+    setRange({ ...range });
+  };
 
   return (
     <Flex
       alignItems="center"
-      justifyContent="space-between"
-      gap={16}
+      gap={8}
       padding={12}
-      flexWrap="wrap"
       style={{ borderBottom: "1px solid var(--dt-colors-border-neutral-default)" }}
     >
-      <Flex alignItems="center" gap={16} flexWrap="wrap">
-        <Flex alignItems="center" gap={6}>
-          <Text>Provider:</Text>
-          {PROVIDERS.map((p: { id: Provider; label: string }) => (
-            <Button
-              key={p.id}
-              variant={isProviderActive(p.id) ? "accent" : "default"}
-              onClick={() => toggleProvider(p.id)}
-            >
-              {p.label}
-            </Button>
-          ))}
-          {selectedProviders.length > 0 && (
-            <Button variant="default" onClick={clearProvider}>
-              ✕
-            </Button>
-          )}
-        </Flex>
-
-        <Flex alignItems="center" gap={6}>
-          <Text>Estratégia:</Text>
-          {BRANCH_STRATEGIES.map((s: { id: BranchStrategy; label: string }) => (
-            <Button
-              key={s.id}
-              variant={isStrategyActive(s.id) ? "accent" : "default"}
-              onClick={() => toggleStrategy(s.id)}
-            >
-              {s.label}
-            </Button>
-          ))}
-          {selectedStrategies.length > 0 && (
-            <Button variant="default" onClick={clearStrategy}>
-              ✕
-            </Button>
-          )}
-        </Flex>
+      <Flex style={{ flex: 1, minWidth: 0 }}>
+        <FilterField
+          value={rawValue}
+          onChange={(v, tree) => {
+            setRawValue(v);
+            setPendingTree(tree);
+          }}
+          onFilter={({ syntaxTree, isValid }) => {
+            if (isValid) apply(syntaxTree);
+          }}
+          placeholder="Example: provider = github AND strategy = gitflow"
+          validatorMap={validatorMap}
+          autoSuggestions
+        />
       </Flex>
-
-      <TimeRangeFilter />
+      <TimeRangeFilter key={reloadTick} />
+      <Button variant="emphasized" onClick={handleApply}>
+        Apply
+      </Button>
+      <Button variant="default" onClick={handleReload} aria-label="Reload">
+        ↻
+      </Button>
+      {rawValue && (
+        <Button variant="default" onClick={handleClear} aria-label="Clear">
+          ✕
+        </Button>
+      )}
     </Flex>
   );
 };

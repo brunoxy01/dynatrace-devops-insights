@@ -9,13 +9,19 @@ import {
   commits,
   deploys,
   developers,
-  filterByProviders,
   filterByTimeRange,
   pullRequests,
   repositories,
 } from "../data/mockData";
-import { useProviderFilter } from "../state/ProviderFilterContext";
-import { useStrategyFilter } from "../state/StrategyFilterContext";
+import {
+  filterBuilds,
+  filterCommits,
+  filterDeploys,
+  filterDevelopers,
+  filterPullRequests,
+  filterRepositories,
+} from "../data/applyFilters";
+import { useFilters } from "../state/FilterContext";
 import { useTimeRange } from "../state/TimeRangeContext";
 import { useSDLCBuilds } from "../hooks/useSDLCBuilds";
 import { inferBranchStrategy, strategyDistribution } from "../data/branchStrategy";
@@ -23,41 +29,20 @@ import type { BranchStrategy, Repository } from "../data/types";
 
 export const Overview: React.FC = () => {
   const navigate = useNavigate();
-  const { selected: selectedProviders } = useProviderFilter();
-  const { selected: selectedStrategies } = useStrategyFilter();
+  const { applied } = useFilters();
   const { fromIso, toIso, range } = useTimeRange();
   const { data: buildsData, source: buildsSource } = useSDLCBuilds();
 
   const filtered = useMemo(() => {
-    const repos = filterByProviders(repositories, selectedProviders).filter((r) => {
-      if (selectedStrategies.length === 0) return true;
-      return selectedStrategies.includes(inferBranchStrategy(r));
-    });
+    const repos = filterRepositories(repositories, applied);
     const repoSet = new Set(repos.map((r) => r.fullName));
-
-    const devs = filterByProviders(developers, selectedProviders);
-    const prs = filterByTimeRange(
-      filterByProviders(pullRequests, selectedProviders).filter((p) => repoSet.has(p.repository)),
-      fromIso,
-      toIso,
-    );
-    const cms = filterByTimeRange(
-      filterByProviders(commits, selectedProviders).filter((c) => repoSet.has(c.repository)),
-      fromIso,
-      toIso,
-    );
-    const fbuilds = filterByTimeRange(
-      filterByProviders(buildsData, selectedProviders).filter((b) => repoSet.has(b.repository)),
-      fromIso,
-      toIso,
-    );
-    const fdeploys = filterByTimeRange(
-      filterByProviders(deploys, selectedProviders).filter((d) => repoSet.has(d.repository)),
-      fromIso,
-      toIso,
-    );
+    const devs = filterDevelopers(developers, applied);
+    const prs = filterByTimeRange(filterPullRequests(pullRequests, applied, repoSet), fromIso, toIso);
+    const cms = filterByTimeRange(filterCommits(commits, applied, repoSet), fromIso, toIso);
+    const fbuilds = filterByTimeRange(filterBuilds(buildsData, applied, repoSet), fromIso, toIso);
+    const fdeploys = filterByTimeRange(filterDeploys(deploys, applied, repoSet), fromIso, toIso);
     return { repos, devs, prs, cms, builds: fbuilds, deploys: fdeploys };
-  }, [selectedProviders, selectedStrategies, fromIso, toIso, buildsData]);
+  }, [applied, fromIso, toIso, buildsData]);
 
   const stats = useMemo(() => {
     const succBuilds = filtered.builds.filter((b) => b.status === "success").length;
@@ -72,7 +57,6 @@ export const Overview: React.FC = () => {
       filtered.devs.reduce((a, d) => a + d.avgLeadTimeHours, 0) / Math.max(filtered.devs.length, 1),
     );
     const topDev = [...filtered.devs].sort((a, b) => b.commitsLast30d - a.commitsLast30d)[0];
-    const distribution = strategyDistribution(filtered.repos);
     return {
       totalCommits: filtered.cms.length || filtered.devs.reduce((a, d) => a + d.commitsLast30d, 0),
       totalBranches: filtered.repos.reduce((acc, r) => acc + r.openBranches, 0),
@@ -84,7 +68,7 @@ export const Overview: React.FC = () => {
       avgLeadTime,
       topDev,
       devCount: filtered.devs.length,
-      distribution,
+      distribution: strategyDistribution(filtered.repos),
       deploysCount: filtered.deploys.length,
     };
   }, [filtered]);
@@ -178,14 +162,8 @@ export const Overview: React.FC = () => {
                     reposByStrategy[s].map((r) => (
                       <Text
                         key={r.id}
-                        onClick={() =>
-                          navigate(`/repositories?repo=${encodeURIComponent(r.fullName)}`)
-                        }
-                        style={{
-                          cursor: "pointer",
-                          textDecoration: "underline",
-                          textUnderlineOffset: 3,
-                        }}
+                        onClick={() => navigate(`/repositories`)}
+                        style={{ cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}
                       >
                         {r.fullName}
                       </Text>
@@ -201,8 +179,8 @@ export const Overview: React.FC = () => {
       <Surface padding={16} elevation="raised" className="dt-hover-card">
         <Flex flexDirection="column" gap={12}>
           <Heading level={4}>Top 5 contribuidores</Heading>
-          {[...developers]
-            .filter((d) => selectedProviders.length === 0 || selectedProviders.includes(d.provider))
+          {filtered.devs
+            .slice()
             .sort((a, b) => b.commitsLast30d - a.commitsLast30d)
             .slice(0, 5)
             .map((d, i) => (
