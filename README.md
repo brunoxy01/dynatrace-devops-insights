@@ -67,7 +67,31 @@ npx dt-app uninstall   # remove
 
 ## DQL útil
 
-**Ver os eventos do nosso PR (cole no Notebook):**
+**PRs/MRs abertos — quantos, por autor e por repositório (a query principal do app):**
+
+```dql
+fetch events
+| filter event.kind == "SDLC_EVENT" and event.type == "pull_request"
+| parse repository, "JSON:repoObj"
+| parse sender, "JSON:senderObj"
+| parse workflow_run, "JSON:wfObj"
+| fieldsAdd repo = repoObj[full_name],
+           author = senderObj[login],
+           branch = wfObj[head_branch]
+| filter isNotNull(repo)
+| dedup {repo, branch}, sort: {timestamp desc}
+| summarize open_prs = count(), by: {repo, author}
+| sort open_prs desc
+```
+
+> **Por que o `parse ..., "JSON:..."`?** No webhook adapter, os objetos
+> `repository`, `sender`, `pull_request`, `workflow_run` chegam como **strings
+> JSON serializadas**. Por isso `repository.full_name == ...` retorna 0 — é
+> preciso desserializar a string com o matcher JSON do DQL. O
+> `dedup {repo, branch}` colapsa os vários eventos (opened/synchronize/finished)
+> do mesmo PR em uma linha, separando PRs distintos pela branch de origem.
+
+**Versão simples (só listar os eventos do nosso repo):**
 
 ```dql
 fetch events
@@ -78,10 +102,10 @@ fetch events
 | limit 20
 ```
 
-> Note o `contains(repository, ...)` em vez de `repository.full_name == ...` —
-> necessário porque `repository` é uma string JSON serializada (ver acima).
+> `contains(repository, "...")` funciona como filtro de repo justamente porque
+> `repository` é uma string JSON que contém o nome.
 
-**Ver tudo que está chegando, agrupado:**
+**Ver tudo que está chegando, agrupado por tipo/status:**
 
 ```dql
 fetch events
@@ -90,15 +114,15 @@ fetch events
 | sort `count()` desc
 ```
 
-**Contar commits (somando o array commits dos pushes):**
+## Status de validação por provider
 
-```dql
-fetch events
-| filter event.kind == "SDLC_EVENT"
-| filter event.type == "push"
-| filter contains(repository, "dynatrace-devops-insights")
-| sort timestamp desc
-```
+A ingestão de SDLC events foi validada por provider de Git:
+
+| Provider | Status | Observação |
+|---|---|---|
+| **GitHub** | ✅ Validado | PRs aparecem no app via webhook (evento `pull_request`). Requer proxy ou token na query (ver abaixo) |
+| **Azure DevOps** | ⏳ A testar | Mesmo cenário, webhook nativo (Service Hooks) |
+| **GitLab** | ⏳ A testar | Mesmo cenário, webhook nativo |
 
 ---
 
