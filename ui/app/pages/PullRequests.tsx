@@ -37,7 +37,9 @@ export const PullRequests: React.FC = () => {
         width: "1fr",
         alignment: "center",
         cell: ({ rowData }) => (
-          <ExternalLink href={repoUrl(rowData.repository)}>{rowData.repository}</ExternalLink>
+          <ExternalLink href={repoUrl(rowData.repository, rowData.provider)}>
+            {rowData.repository}
+          </ExternalLink>
         ),
       },
       {

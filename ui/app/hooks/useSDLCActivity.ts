@@ -94,7 +94,7 @@ export function useSDLCActivity(): ActivitySnapshot {
         if (!prev || (ts && ts > prev)) lastSeen.set(author, ts);
       }
 
-      if (type === "pull_request") {
+      if (type === "pull_request" || type === "merge_request") {
         const key = prKeyOf(r);
         const existing = prByKey.get(key);
         if (!existing || ts > existing.ts) prByKey.set(key, { author, ts });

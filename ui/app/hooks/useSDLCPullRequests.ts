@@ -57,9 +57,10 @@ function mapRecord(r: Record<string, unknown>, i: number): PullRequest {
     [
       "pull_request.user.login",
       "sender.login",
-      "object_attributes.last_commit.author.name", // gitlab
+      "user.username", // gitlab MR webhook
+      "user.name",
       "user.login",
-      "user.username",
+      "object_attributes.last_commit.author.name", // gitlab
     ],
     "",
   );
@@ -132,9 +133,10 @@ function dedupLatestPerPR(prs: PullRequest[]): PullRequest[] {
 const FALLBACK_QUERY = "fetch dt.entity.host | limit 0";
 
 function buildQuery(fromIso: string, toIso: string): string {
+  // pull_request = GitHub · merge_request = GitLab/Azure
   return `fetch events, from: "${fromIso}", to: "${toIso}"
 | filter event.kind == "SDLC_EVENT"
-| filter event.type == "pull_request"
+| filter event.type == "pull_request" or event.type == "merge_request"
 | sort timestamp desc
 | limit 500`;
 }
