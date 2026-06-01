@@ -3,13 +3,11 @@ import { Flex } from "@dynatrace/strato-components/layouts";
 import { Button } from "@dynatrace/strato-components/buttons";
 import { FilterField } from "@dynatrace/strato-components/filters";
 import type { FilterFieldTree, FilterFieldValidatorMap } from "@dynatrace/strato-components/filters";
-import { repositories } from "../data/mockData";
 import { useFilters } from "../state/FilterContext";
 import { useTimeRange } from "../state/TimeRangeContext";
 import { TimeRangeFilter } from "./TimeRangeFilter";
 
 const PROVIDER_VALUES = ["github", "gitlab", "azure-devops"];
-const STRATEGY_VALUES = ["gitflow", "trunk-based", "none"];
 const ENV_VALUES = ["production", "staging", "dev"];
 
 export const FilterBar: React.FC = () => {
@@ -19,8 +17,6 @@ export const FilterBar: React.FC = () => {
   const [reloadTick, setReloadTick] = useState(0);
 
   const validatorMap = useMemo<FilterFieldValidatorMap>(() => {
-    const repoNames = repositories.map((r) => r.fullName);
-    const appNames = [...new Set(repositories.map((r) => r.application))];
     return {
       keyPredicates: [
         {
@@ -30,22 +26,9 @@ export const FilterBar: React.FC = () => {
           details: "Git provider",
         },
         {
-          key: "strategy",
-          valueType: "String",
-          valuePredicate: STRATEGY_VALUES,
-          details: "Branch strategy",
-        },
-        {
           key: "repository",
           valueType: "String",
-          valuePredicate: repoNames,
-          details: "Full name owner/repo",
-        },
-        {
-          key: "application",
-          valueType: "String",
-          valuePredicate: appNames,
-          details: "Service application name",
+          details: "Full repo name (e.g. brunoxy01/dynatrace-devops-insights)",
         },
         {
           key: "environment",
@@ -101,7 +84,7 @@ export const FilterBar: React.FC = () => {
           onFilter={({ syntaxTree, isValid }) => {
             if (isValid) apply(syntaxTree);
           }}
-          placeholder="Example: provider = github AND strategy = gitflow"
+          placeholder="Example: provider = github AND author = brunoxy01"
           validatorMap={validatorMap}
           autoSuggestions
         />

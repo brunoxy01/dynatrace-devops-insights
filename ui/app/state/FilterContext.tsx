@@ -1,12 +1,10 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 import type { FilterFieldTree } from "@dynatrace/strato-components/filters";
-import type { BranchStrategy, Provider } from "../data/types";
+import type { Provider } from "../data/types";
 
 export interface AppliedFilters {
   provider?: Provider[];
-  strategy?: BranchStrategy[];
   repository?: string[];
-  application?: string[];
   environment?: string[];
   author?: string[];
   branch?: string[];
@@ -26,7 +24,12 @@ function parseTreeToFilters(tree: FilterFieldTree): AppliedFilters {
   const out: AppliedFilters = {};
   const visit = (node: unknown): void => {
     if (!node || typeof node !== "object") return;
-    const n = node as { type?: string; children?: unknown[]; key?: { value?: string }; value?: { value?: string; children?: unknown[] } };
+    const n = node as {
+      type?: string;
+      children?: unknown[];
+      key?: { value?: string };
+      value?: { value?: string; children?: unknown[] };
+    };
     if (n.type === "Statement" && n.key?.value) {
       const k = n.key.value as keyof AppliedFilters;
       const val = n.value;
@@ -75,25 +78,4 @@ export function useFilters(): FilterContextValue {
   const ctx = useContext(FilterContext);
   if (!ctx) throw new Error("useFilters must be used inside FilterProvider");
   return ctx;
-}
-
-export function matchProvider(applied: AppliedFilters, provider: Provider): boolean {
-  if (!applied.provider || applied.provider.length === 0) return true;
-  return applied.provider.includes(provider);
-}
-
-export function matchStrategy(applied: AppliedFilters, strategy: BranchStrategy): boolean {
-  if (!applied.strategy || applied.strategy.length === 0) return true;
-  return applied.strategy.includes(strategy);
-}
-
-export function matchString(
-  applied: AppliedFilters,
-  key: keyof AppliedFilters,
-  value: string | undefined,
-): boolean {
-  const list = applied[key] as string[] | undefined;
-  if (!list || list.length === 0) return true;
-  if (!value) return false;
-  return list.includes(value);
 }

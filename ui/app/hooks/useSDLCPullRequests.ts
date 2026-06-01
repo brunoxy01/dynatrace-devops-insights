@@ -1,21 +1,14 @@
 import { useMemo } from "react";
 import { useDql } from "@dynatrace-sdk/react-hooks";
-import { pullRequests as mockPullRequests } from "../data/mockData";
 import type { Provider, PullRequest } from "../data/types";
 import { useTimeRange } from "../state/TimeRangeContext";
-
-// Repos que queremos enxergar. Adicione novos repos aqui conforme conectar
-// mais webhooks. O filtro casa por `contains` pra absorver pequenas variações
-// de URL (https vs git@, com ou sem .git no final).
-export const REPO_WATCHLIST = ["brunoxy01/dynatrace-devops-insights"];
 
 interface UseSDLCPullRequestsResult {
   data: PullRequest[];
   isLoading: boolean;
   error?: Error;
-  source: "grail" | "mock";
-  rawSample?: Record<string, unknown>;
   rawCount: number;
+  rawSample?: Record<string, unknown>;
 }
 
 function providerFromUrl(url: string | undefined): Provider {
@@ -25,7 +18,7 @@ function providerFromUrl(url: string | undefined): Provider {
   return "github";
 }
 
-function pick<T>(record: Record<string, unknown>, keys: string[], fallback: T): T | string {
+function pick(record: Record<string, unknown>, keys: string[], fallback = ""): string {
   for (const k of keys) {
     const v = record[k];
     if (v !== undefined && v !== null && v !== "") return String(v);
@@ -34,82 +27,90 @@ function pick<T>(record: Record<string, unknown>, keys: string[], fallback: T): 
 }
 
 function inferState(record: Record<string, unknown>): PullRequest["state"] {
-  const status = String(record["event.status"] ?? "").toLowerCase();
-  const outcome = String(record["event.outcome"] ?? record["pull_request.state"] ?? "").toLowerCase();
+  const outcome = pick(
+    record,
+    ["pull_request.state", "event.outcome", "change.state", "state"],
+    "",
+  ).toLowerCase();
   if (outcome === "merged") return "merged";
   if (outcome === "closed") return "closed";
-  if (status === "finished" || status === "completed") {
-    return outcome === "merged" ? "merged" : outcome === "closed" ? "closed" : "open";
-  }
   return "open";
 }
 
 function mapDqlRecordToPr(r: Record<string, unknown>, i: number): PullRequest {
-  const url = String(
-    pick(r, ["vcs.repository.url", "repository.url", "pull_request.repository.url"], ""),
-  );
-  const repoName = url
-    .replace(/^https?:\/\/[^/]+\//, "")
-    .replace(/\.git$/, "")
-    .replace(/\/$/, "");
-  const number = Number(
-    pick(
-      r,
-      [
-        "vcs.repository.change.id",
+  const url = pick(r, [
+    "vcs.repository.url",
+    "pull_request.html_url",
+    "pull_request.base.repo.html_url",
+    "repository.html_url",
+    "repository.url",
+  ]);
+  const repoFull = pick(r, [
+    "repository.full_name",
+    "pull_request.base.repo.full_name",
+    "vcs.repository.name",
+  ]);
+  const repoName =
+    repoFull ||
+    url
+      .replace(/^https?:\/\/[^/]+\//, "")
+      .replace(/\/pull\/.*$/, "")
+      .replace(/\.git$/, "")
+      .replace(/\/$/, "");
+  const number =
+    Number(
+      pick(r, [
         "pull_request.number",
+        "vcs.repository.change.id",
         "change.id",
-        "pull_request.id",
-      ],
-      String(i + 1),
-    ),
+        "number",
+      ]),
+    ) || i + 1;
+  const title = pick(
+    r,
+    ["pull_request.title", "vcs.repository.change.title", "change.title", "title"],
+    "(no title)",
   );
-  const title = String(
-    pick(
-      r,
-      ["vcs.repository.change.title", "pull_request.title", "change.title", "title"],
-      "(no title)",
-    ),
-  );
-  const author = String(
-    pick(
-      r,
-      [
-        "vcs.repository.change.author",
-        "pull_request.user.login",
-        "pull_request.author",
-        "change.author",
-        "author",
-      ],
-      "unknown",
-    ),
+  const author = pick(
+    r,
+    [
+      "pull_request.user.login",
+      "vcs.repository.change.author",
+      "sender.login",
+      "change.author",
+      "author",
+      "user.login",
+    ],
+    "unknown",
   );
   const additions = Number(
-    pick(r, ["vcs.repository.change.additions", "pull_request.additions", "additions"], "0"),
+    pick(r, ["pull_request.additions", "vcs.repository.change.additions", "additions"], "0"),
   );
   const deletions = Number(
-    pick(r, ["vcs.repository.change.deletions", "pull_request.deletions", "deletions"], "0"),
+    pick(r, ["pull_request.deletions", "vcs.repository.change.deletions", "deletions"], "0"),
   );
-  const ts = String(pick(r, ["timestamp"], new Date().toISOString()));
+  const createdAt = pick(
+    r,
+    ["pull_request.created_at", "timestamp"],
+    new Date().toISOString(),
+  );
+  const updatedAt = pick(r, ["pull_request.updated_at", "timestamp"], createdAt);
 
   return {
-    id: String(pick(r, ["event.id", "change.id", "pull_request.id"], `grail-pr-${i}`)),
+    id: pick(r, ["pull_request.id", "event.id", "change.id"], `grail-pr-${i}`),
     number,
     title,
     repository: repoName || "unknown",
     provider: providerFromUrl(url),
     author,
     state: inferState(r),
-    createdAt: ts,
-    updatedAt: ts,
+    createdAt,
+    updatedAt,
     additions,
     deletions,
   };
 }
 
-// Dedup: pega o evento mais recente por (repo + PR number). Isso porque o
-// adapter gera vários eventos (started/finished) pra mesma PR e queremos só
-// o estado atual.
 function dedupLatestPerPR(prs: PullRequest[]): PullRequest[] {
   const map = new Map<string, PullRequest>();
   for (const pr of prs) {
@@ -127,11 +128,13 @@ function dedupLatestPerPR(prs: PullRequest[]): PullRequest[] {
 const FALLBACK_QUERY = "fetch dt.entity.host | limit 0";
 
 function buildQuery(fromIso: string, toIso: string): string {
-  const repoFilter = REPO_WATCHLIST.map((r) => `vcs.repository.url contains "${r}"`).join(" or ");
+  // Sem filtro de repo: o campo vcs.repository.url chega null no payload do
+  // GitHub adapter, então não dá pra filtrar por aqui. Como a tenant tem
+  // um único webhook conectado por enquanto, todos os pull_request events
+  // são nossos. Quando conectar outros repos, filtramos no client.
   return `fetch events, from: "${fromIso}", to: "${toIso}"
 | filter event.kind == "SDLC_EVENT"
 | filter event.type == "pull_request"
-| filter ${repoFilter}
 | sort timestamp desc
 | limit 200`;
 }
@@ -139,7 +142,6 @@ function buildQuery(fromIso: string, toIso: string): string {
 export function useSDLCPullRequests(): UseSDLCPullRequestsResult {
   const { fromIso, toIso } = useTimeRange();
   const isValidRange = new Date(fromIso).getTime() < new Date(toIso).getTime() - 60_000;
-
   const query = isValidRange ? buildQuery(fromIso, toIso) : FALLBACK_QUERY;
   const { data, isLoading, error } = useDql({ query });
 
@@ -147,10 +149,9 @@ export function useSDLCPullRequests(): UseSDLCPullRequestsResult {
     const records = (data?.records ?? []) as Record<string, unknown>[];
     if (!isValidRange || error || records.length === 0) {
       return {
-        data: mockPullRequests,
+        data: [],
         isLoading,
         error: error as Error | undefined,
-        source: "mock",
         rawCount: 0,
       };
     }
@@ -158,9 +159,8 @@ export function useSDLCPullRequests(): UseSDLCPullRequestsResult {
     return {
       data: prs,
       isLoading,
-      source: "grail",
-      rawSample: records[0],
       rawCount: records.length,
+      rawSample: records[0],
     };
   }, [data, isLoading, error, isValidRange]);
 }
