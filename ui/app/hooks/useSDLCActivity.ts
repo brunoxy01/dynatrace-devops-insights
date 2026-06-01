@@ -94,24 +94,31 @@ export function useSDLCActivity(): ActivitySnapshot {
       }
 
       if (type === "push") {
+        const addCommit = (sha: string, author: string): void => {
+          if (!sha || commitShas.has(sha)) return;
+          commitShas.add(sha);
+          if (author) {
+            const set = commitsByAuthor.get(author) ?? new Set<string>();
+            set.add(sha);
+            commitsByAuthor.set(author, set);
+          }
+        };
         const commits = resolveField(r, "commits");
-        if (Array.isArray(commits)) {
+        if (Array.isArray(commits) && commits.length > 0) {
           for (const c of commits) {
             const co = c as Record<string, unknown> | null;
             const sha = co ? String(co.id ?? co.sha ?? "") : "";
-            if (!sha || commitShas.has(sha)) continue;
-            commitShas.add(sha);
             const ca =
               (co &&
                 (resolveString(co, ["author.username", "author.name"]) ||
                   String(co.author ?? ""))) ||
               evAuthor;
-            if (ca) {
-              const set = commitsByAuthor.get(ca) ?? new Set<string>();
-              set.add(sha);
-              commitsByAuthor.set(ca, set);
-            }
+            addCommit(sha, ca);
           }
+        } else {
+          // Push sem array `commits` serializado: conta ao menos o head commit
+          const sha = resolveString(r, ["head_commit.id", "after", "checkout_sha"]);
+          addCommit(sha, evAuthor);
         }
       }
     }

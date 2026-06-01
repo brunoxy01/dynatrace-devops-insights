@@ -5,10 +5,25 @@
 // `filter repository.full_name == ...` retorna 0. A solução é navegar o path
 // fazendo JSON.parse das strings ao longo do caminho.
 
+function maybeParseJson(value: string): unknown {
+  const t = value.trim();
+  if (t.startsWith("{") || t.startsWith("[")) {
+    try {
+      return JSON.parse(t);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
 export function resolveField(record: Record<string, unknown>, path: string): unknown {
-  // 1) chave plana com ponto literal (caso o Grail já tenha expandido)
+  // 1) chave plana com ponto literal (caso o Grail já tenha expandido).
+  //    Se o valor for uma string que contém JSON (ex: o array `commits` ou
+  //    o objeto `repository`), parseia — senão Array.isArray/acesso falham.
   const direct = record[path];
   if (direct !== undefined && direct !== null && typeof direct !== "object") {
+    if (typeof direct === "string") return maybeParseJson(direct);
     return direct;
   }
 
