@@ -29,9 +29,8 @@ export const Developers: React.FC = () => {
 
   const columns = useMemo<DataTableColumnDef<Contributor>[]>(
     () => [
-      { id: "name", header: "Desenvolvedor", accessor: "name", width: "1fr" },
-      { id: "prsOpened", header: "PRs abertos", accessor: "prsOpened", width: 140 },
-      { id: "prsMerged", header: "PRs concluídos", accessor: "prsMerged", width: 160 },
+      { id: "name", header: "Contribuidor", accessor: "name", width: "1fr" },
+      { id: "prsOpen", header: "PRs abertos", accessor: "prsOpen", width: 150 },
       { id: "commits", header: "Commits", accessor: "commits", width: 150 },
       {
         id: "lastActivity",

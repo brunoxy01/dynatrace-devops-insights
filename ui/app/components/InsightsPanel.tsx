@@ -43,11 +43,8 @@ function buildInsights({ contributors, prs, commits }: Props): Insight[] {
     });
   } else if (contributors.length > 1) {
     const top = contributors[0];
-    const totalActions = contributors.reduce(
-      (a, c) => a + c.prsOpened + c.commits + c.builds,
-      0,
-    );
-    const topActions = top.prsOpened + top.commits + top.builds;
+    const totalActions = contributors.reduce((a, c) => a + c.prsOpen + c.commits, 0);
+    const topActions = top.prsOpen + top.commits;
     const pct = Math.round((topActions / Math.max(totalActions, 1)) * 100);
     if (pct >= 70) {
       out.push({

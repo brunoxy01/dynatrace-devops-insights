@@ -6,10 +6,8 @@ import { resolveString, resolveField } from "../data/eventFields";
 
 export interface Contributor {
   name: string;
-  prsOpened: number;
-  prsMerged: number;
+  prsOpen: number;
   commits: number;
-  builds: number;
   lastActivity: string;
 }
 
@@ -17,8 +15,7 @@ export interface ActivitySnapshot {
   contributors: Contributor[];
   totals: {
     commits: number;
-    pushEvents: number;
-    buildEvents: number;
+    openPrs: number;
     distinctAuthors: number;
   };
   isLoading: boolean;
@@ -49,23 +46,6 @@ function authorOf(r: Record<string, unknown>): string {
   ]);
 }
 
-// Número de commits dentro de um evento push. O payload do GitHub traz o
-// array `commits`; somamos seu tamanho. Fallbacks: size/distinct_size, e
-// por fim 1 (o push trouxe ao menos 1 commit).
-function commitCountOf(r: Record<string, unknown>): number {
-  const commits = resolveField(r, "commits");
-  if (Array.isArray(commits)) return commits.length || 1;
-  const size = Number(resolveString(r, ["size", "distinct_size"], ""));
-  if (Number.isFinite(size) && size > 0) return size;
-  return 1;
-}
-
-// Identificador único do push pra não contar o mesmo push duas vezes
-// (o adapter emite started + finished pra cada push).
-function pushKeyOf(r: Record<string, unknown>): string {
-  return resolveString(r, ["after", "head_commit.id", "checkout_sha", "timestamp"], "");
-}
-
 function buildQuery(fromIso: string, toIso: string): string {
   return `fetch events, from: "${fromIso}", to: "${toIso}"
 | filter event.kind == "SDLC_EVENT"
@@ -83,54 +63,87 @@ export function useSDLCActivity(): ActivitySnapshot {
     const records = (data?.records ?? []) as Record<string, unknown>[];
     const matched = records.filter((r) => matchesWatchlist(repoOf(r)));
 
-    const byAuthor = new Map<string, Contributor>();
-    const totals = { commits: 0, pushEvents: 0, buildEvents: 0, distinctAuthors: 0 };
-    const seenPush = new Set<string>();
+    // --- PRs únicos: agrupa eventos pull_request por repositório (sem número
+    // confiável, assumimos 1 PR aberto por repo). Pega o autor do evento mais
+    // recente de cada grupo. NÃO conta started/finished como PRs separados. ---
+    const prByRepo = new Map<string, { author: string; ts: string }>();
 
-    const getContributor = (name: string): Contributor => {
-      const c =
-        byAuthor.get(name) ??
-        ({ name, prsOpened: 0, prsMerged: 0, commits: 0, builds: 0, lastActivity: "" } as Contributor);
-      byAuthor.set(name, c);
-      return c;
+    // --- Commits: SHAs únicos coletados dos arrays `commits` dos pushes.
+    // Atribui cada commit ao seu próprio autor. ---
+    const commitShas = new Set<string>();
+    const commitsByAuthor = new Map<string, Set<string>>();
+
+    const lastSeen = new Map<string, string>();
+
+    const touchAuthor = (name: string, ts: string): void => {
+      if (!name) return;
+      const prev = lastSeen.get(name);
+      if (!prev || (ts && ts > prev)) lastSeen.set(name, ts);
     };
 
     for (const r of matched) {
       const type = String(r["event.type"] ?? "");
-      const status = String(r["event.status"] ?? "").toLowerCase();
       const ts = String(r["timestamp"] ?? "");
-      const author = authorOf(r);
+      const evAuthor = authorOf(r);
+      touchAuthor(evAuthor, ts);
 
-      if (type === "build") totals.buildEvents++;
-
-      // Commits: conta o array de commits por push único
-      if (type === "push") {
-        totals.pushEvents++;
-        const key = pushKeyOf(r);
-        if (key && !seenPush.has(key)) {
-          seenPush.add(key);
-          const n = commitCountOf(r);
-          totals.commits += n;
-          if (author) getContributor(author).commits += n;
-        }
+      if (type === "pull_request") {
+        const repo = repoOf(r);
+        const existing = prByRepo.get(repo);
+        if (!existing || ts > existing.ts) prByRepo.set(repo, { author: evAuthor, ts });
       }
 
-      if (!author) continue;
-      const c = getContributor(author);
-      if (type === "pull_request" && status === "started") c.prsOpened++;
-      if (type === "pull_request" && status === "finished") c.prsMerged++;
-      if (type === "build") c.builds++;
-      if (ts && (!c.lastActivity || ts > c.lastActivity)) c.lastActivity = ts;
+      if (type === "push") {
+        const commits = resolveField(r, "commits");
+        if (Array.isArray(commits)) {
+          for (const c of commits) {
+            const co = c as Record<string, unknown> | null;
+            const sha = co ? String(co.id ?? co.sha ?? "") : "";
+            if (!sha || commitShas.has(sha)) continue;
+            commitShas.add(sha);
+            const ca =
+              (co &&
+                (resolveString(co, ["author.username", "author.name"]) ||
+                  String(co.author ?? ""))) ||
+              evAuthor;
+            if (ca) {
+              const set = commitsByAuthor.get(ca) ?? new Set<string>();
+              set.add(sha);
+              commitsByAuthor.set(ca, set);
+            }
+          }
+        }
+      }
     }
 
-    const contributors = Array.from(byAuthor.values()).sort(
-      (a, b) => b.commits + b.prsOpened - (a.commits + a.prsOpened),
-    );
-    totals.distinctAuthors = contributors.length;
+    // PRs abertos por autor
+    const prsOpenByAuthor = new Map<string, number>();
+    for (const { author } of prByRepo.values()) {
+      if (!author) continue;
+      prsOpenByAuthor.set(author, (prsOpenByAuthor.get(author) ?? 0) + 1);
+    }
+
+    const names = new Set<string>([
+      ...prsOpenByAuthor.keys(),
+      ...commitsByAuthor.keys(),
+    ]);
+
+    const contributors: Contributor[] = Array.from(names)
+      .map((name) => ({
+        name,
+        prsOpen: prsOpenByAuthor.get(name) ?? 0,
+        commits: commitsByAuthor.get(name)?.size ?? 0,
+        lastActivity: lastSeen.get(name) ?? "",
+      }))
+      .sort((a, b) => b.commits + b.prsOpen - (a.commits + a.prsOpen));
 
     return {
       contributors,
-      totals,
+      totals: {
+        commits: commitShas.size,
+        openPrs: prByRepo.size,
+        distinctAuthors: contributors.length,
+      },
       isLoading,
       error: error as Error | undefined,
       rawCount: records.length,

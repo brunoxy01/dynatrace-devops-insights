@@ -34,9 +34,7 @@ export const Overview: React.FC = () => {
       contributors: activity.totals.distinctAuthors,
       openPrs: open,
       topContributor: top?.name ?? "—",
-      topContributorHint: top
-        ? `${top.prsOpened} PRs · ${top.commits} commits`
-        : undefined,
+      topContributorHint: top ? `${top.prsOpen} PRs · ${top.commits} commits` : undefined,
     };
   }, [activity, prs]);
 
@@ -105,7 +103,7 @@ export const Overview: React.FC = () => {
                       {i + 1}. {c.name}
                     </Text>
                     <Text textStyle="small">
-                      {c.prsOpened} PRs · {c.commits} commits · {fmtRelative(c.lastActivity)}
+                      {c.prsOpen} PRs · {c.commits} commits · {fmtRelative(c.lastActivity)}
                     </Text>
                   </Flex>
                 ))
