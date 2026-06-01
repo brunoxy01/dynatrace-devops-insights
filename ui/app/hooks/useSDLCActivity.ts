@@ -2,9 +2,11 @@ import { useMemo } from "react";
 import { useDql } from "@dynatrace-sdk/react-hooks";
 import { useTimeRange } from "../state/TimeRangeContext";
 import { matchesWatchlist } from "../config";
+import type { Provider } from "../data/types";
 import {
   authorName,
   branchName,
+  eventProvider,
   isPrEvent,
   prDedupKey,
   prNumber,
@@ -13,6 +15,7 @@ import {
 
 export interface Contributor {
   name: string;
+  provider: Provider;
   prsOpen: number;
   lastActivity: string;
 }
@@ -38,6 +41,10 @@ function buildQuery(fromIso: string, toIso: string): string {
 | limit 2000`;
 }
 
+// Contribuidor é identificado por provider + nome: brunoxy01 no GitHub e
+// brunoxy01 no GitLab são contas distintas em plataformas distintas.
+const contribKey = (provider: Provider, name: string): string => `${provider}|${name}`;
+
 export function useSDLCActivity(): ActivitySnapshot {
   const { fromIso, toIso } = useTimeRange();
   const isValidRange = new Date(fromIso).getTime() < new Date(toIso).getTime() - 60_000;
@@ -48,41 +55,43 @@ export function useSDLCActivity(): ActivitySnapshot {
     const records = (data?.records ?? []) as Record<string, unknown>[];
     const matched = records.filter((r) => matchesWatchlist(repoFullName(r)));
 
-    const prByKey = new Map<string, { author: string; ts: string }>();
-    const lastSeen = new Map<string, string>();
+    const contribByKey = new Map<string, Contributor>();
+    const prByKey = new Map<string, { authorKey: string; ts: string }>();
 
     for (const r of matched) {
       const ts = String(r["timestamp"] ?? "");
+      const provider = eventProvider(r);
       const author = authorName(r);
 
       if (author) {
-        const prev = lastSeen.get(author);
-        if (!prev || (ts && ts > prev)) lastSeen.set(author, ts);
+        const k = contribKey(provider, author);
+        const c =
+          contribByKey.get(k) ?? ({ name: author, provider, prsOpen: 0, lastActivity: "" } as Contributor);
+        if (ts && ts > c.lastActivity) c.lastActivity = ts;
+        contribByKey.set(k, c);
       }
 
       if (isPrEvent(r)) {
-        const key = prDedupKey(repoFullName(r), prNumber(r), branchName(r));
-        if (key) {
-          const existing = prByKey.get(key);
-          if (!existing || ts > existing.ts) prByKey.set(key, { author, ts });
+        const dk = prDedupKey(repoFullName(r), prNumber(r), branchName(r));
+        if (dk) {
+          const existing = prByKey.get(dk);
+          if (!existing || ts > existing.ts) {
+            prByKey.set(dk, { authorKey: author ? contribKey(provider, author) : "", ts });
+          }
         }
       }
     }
 
-    const prsOpenByAuthor = new Map<string, number>();
-    for (const { author } of prByKey.values()) {
-      if (!author) continue;
-      prsOpenByAuthor.set(author, (prsOpenByAuthor.get(author) ?? 0) + 1);
+    // Atribui PRs abertos ao contribuidor correspondente
+    for (const { authorKey } of prByKey.values()) {
+      if (!authorKey) continue;
+      const c = contribByKey.get(authorKey);
+      if (c) c.prsOpen += 1;
     }
 
-    const names = new Set<string>([...prsOpenByAuthor.keys(), ...lastSeen.keys()]);
-    const contributors: Contributor[] = Array.from(names)
-      .map((name) => ({
-        name,
-        prsOpen: prsOpenByAuthor.get(name) ?? 0,
-        lastActivity: lastSeen.get(name) ?? "",
-      }))
-      .sort((a, b) => b.prsOpen - a.prsOpen);
+    const contributors = Array.from(contribByKey.values()).sort(
+      (a, b) => b.prsOpen - a.prsOpen || a.name.localeCompare(b.name),
+    );
 
     return {
       contributors,

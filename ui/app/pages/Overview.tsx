@@ -8,6 +8,10 @@ import { InsightsPanel } from "../components/InsightsPanel";
 import { useSDLCActivity } from "../hooks/useSDLCActivity";
 import { useSDLCPullRequests } from "../hooks/useSDLCPullRequests";
 import { useTimeRange } from "../state/TimeRangeContext";
+import { PROVIDERS, type Provider } from "../data/types";
+
+const providerLabel = (id: Provider): string =>
+  PROVIDERS.find((p) => p.id === id)?.label ?? id;
 
 const fmtRelative = (iso: string): string => {
   if (!iso) return "—";
@@ -33,7 +37,9 @@ export const Overview: React.FC = () => {
       contributors: activity.totals.distinctAuthors,
       openPrs: open,
       topContributor: top?.name ?? "—",
-      topContributorHint: top ? `${top.prsOpen} PR(s) aberto(s)` : undefined,
+      topContributorHint: top
+        ? `${providerLabel(top.provider)} · ${top.prsOpen} PR(s) aberto(s)`
+        : undefined,
     };
   }, [activity, prs]);
 
@@ -92,9 +98,14 @@ export const Overview: React.FC = () => {
                 <Text>Nenhum contribuidor identificado no período.</Text>
               ) : (
                 activity.contributors.map((c, i) => (
-                  <Flex key={c.name} justifyContent="space-between" alignItems="center">
+                  <Flex
+                    key={`${c.provider}|${c.name}`}
+                    justifyContent="space-between"
+                    alignItems="center"
+                  >
                     <Text>
-                      {i + 1}. {c.name}
+                      {i + 1}. {c.name}{" "}
+                      <Text textStyle="small">· {providerLabel(c.provider)}</Text>
                     </Text>
                     <Text textStyle="small">
                       {c.prsOpen} PR(s) · {fmtRelative(c.lastActivity)}

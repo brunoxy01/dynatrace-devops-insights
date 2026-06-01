@@ -7,6 +7,10 @@ import { Chip } from "@dynatrace/strato-components/content";
 import { useSDLCActivity, type Contributor } from "../hooks/useSDLCActivity";
 import { useTimeRange } from "../state/TimeRangeContext";
 import { useFilters } from "../state/FilterContext";
+import { PROVIDERS } from "../data/types";
+
+const providerLabel = (id: Contributor["provider"]): string =>
+  PROVIDERS.find((p) => p.id === id)?.label ?? id;
 
 const fmtTimestamp = (iso: string): string => {
   if (!iso) return "—";
@@ -30,6 +34,12 @@ export const Developers: React.FC = () => {
   const columns = useMemo<DataTableColumnDef<Contributor>[]>(
     () => [
       { id: "name", header: "Contribuidor", accessor: "name", width: "1fr" },
+      {
+        id: "provider",
+        header: "Provider",
+        accessor: (c) => providerLabel(c.provider),
+        width: 160,
+      },
       { id: "prsOpen", header: "PRs abertos", accessor: "prsOpen", width: 150 },
       {
         id: "lastActivity",

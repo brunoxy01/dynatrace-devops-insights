@@ -66,10 +66,13 @@ export function authorName(r: Record<string, unknown>): string {
   return resolveString(r, [
     "pull_request.user.login", // github bruto
     "sender.login",
-    "vcs.change.author", // semantic
+    "vcs.change.author", // semantic dictionary
     "vcs.change.author.name",
+    "vcs.change.author.username",
     "vcs.author.name",
+    "vcs.author.username",
     "vcs.author",
+    "ext.vcs.change.author",
     "user.username", // gitlab MR bruto
     "user.name",
     "author",
