@@ -34,13 +34,13 @@ export const PullRequests: React.FC = () => {
         id: "number",
         header: "PR / MR",
         accessor: "number",
-        width: 100,
-        cell: ({ rowData }) =>
-          rowData.url ? (
-            <ExternalLink href={rowData.url}>#{rowData.number}</ExternalLink>
-          ) : (
-            <Text>#{rowData.number}</Text>
-          ),
+        width: 110,
+        alignment: "center",
+        cell: ({ rowData }) => {
+          const href = rowData.url || repoUrl(rowData.repository);
+          const label = rowData.number > 0 ? `#${rowData.number}` : "abrir →";
+          return <ExternalLink href={href}>{label}</ExternalLink>;
+        },
       },
       {
         id: "title",
@@ -56,12 +56,6 @@ export const PullRequests: React.FC = () => {
         cell: ({ rowData }) => (
           <ExternalLink href={repoUrl(rowData.repository)}>{rowData.repository}</ExternalLink>
         ),
-      },
-      {
-        id: "branch",
-        header: "Branch",
-        accessor: (r) => r.branch || "—",
-        width: 200,
       },
       {
         id: "author",

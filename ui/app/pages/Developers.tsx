@@ -33,7 +33,6 @@ export const Developers: React.FC = () => {
       { id: "prsOpened", header: "PRs abertos", accessor: "prsOpened", width: 140 },
       { id: "prsMerged", header: "PRs concluídos", accessor: "prsMerged", width: 160 },
       { id: "commits", header: "Commits / pushes", accessor: "commits", width: 170 },
-      { id: "builds", header: "Builds", accessor: "builds", width: 120 },
       {
         id: "lastActivity",
         header: "Última atividade",
@@ -48,7 +47,7 @@ export const Developers: React.FC = () => {
     <Flex flexDirection="column" padding={24} gap={16}>
       <Flex flexDirection="column" gap={4} alignItems="flex-start">
         <Flex alignItems="center" gap={12}>
-          <Heading level={2}>Desenvolvedores</Heading>
+          <Heading level={2}>Contribuidores</Heading>
           <Chip color={rows.length > 0 ? "success" : "neutral"}>
             {rows.length > 0 ? `${rows.length} contribuidor(es)` : "sem dados"}
           </Chip>

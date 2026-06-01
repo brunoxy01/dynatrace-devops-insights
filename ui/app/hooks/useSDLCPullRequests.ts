@@ -44,11 +44,9 @@ function mapRecord(r: Record<string, unknown>, i: number): PullRequest {
     "pull_request.url",
     "object_attributes.url", // gitlab MR
   ]);
-  const number = resolveNumber(
-    r,
-    ["pull_request.number", "object_attributes.iid", "number"],
-    i + 1,
-  );
+  // 0 = número desconhecido. Não usamos i+1 (era o índice no array global e
+  // gerava numeração falsa tipo #3, #4 pra eventos do mesmo PR).
+  const number = resolveNumber(r, ["pull_request.number", "object_attributes.iid", "number"], 0);
   const title = resolveString(
     r,
     ["pull_request.title", "object_attributes.title", "title"],
@@ -83,8 +81,10 @@ function mapRecord(r: Record<string, unknown>, i: number): PullRequest {
     createdAt,
   );
 
+  const prId = resolveString(r, ["pull_request.id", "merge_request.id"], "");
+
   return {
-    id: resolveString(r, ["pull_request.id", "event.id"], `pr-${i}`),
+    id: prId || resolveString(r, ["event.id"], `pr-${i}`),
     number,
     title,
     repository: repository || "unknown",
@@ -100,10 +100,18 @@ function mapRecord(r: Record<string, unknown>, i: number): PullRequest {
   };
 }
 
+// Cada PR gera vários eventos (started/finished/etc). Agrupamos pelo melhor
+// identificador disponível: número real do PR, senão id interno, senão o
+// próprio repositório (assume 1 PR aberto por repo quando não há número).
 function dedupLatestPerPR(prs: PullRequest[]): PullRequest[] {
   const map = new Map<string, PullRequest>();
   for (const pr of prs) {
-    const key = `${pr.repository}#${pr.number}`;
+    const key =
+      pr.number > 0
+        ? `${pr.repository}#${pr.number}`
+        : pr.id && !pr.id.startsWith("pr-")
+          ? `${pr.repository}@${pr.id}`
+          : pr.repository;
     const existing = map.get(key);
     if (!existing || new Date(pr.updatedAt).getTime() >= new Date(existing.updatedAt).getTime()) {
       map.set(key, pr);

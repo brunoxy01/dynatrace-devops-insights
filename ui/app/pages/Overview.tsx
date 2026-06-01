@@ -4,6 +4,7 @@ import { Flex, Surface } from "@dynatrace/strato-components/layouts";
 import { Heading, Paragraph, Text } from "@dynatrace/strato-components/typography";
 import { Chip } from "@dynatrace/strato-components/content";
 import { KpiCard } from "../components/KpiCard";
+import { InsightsPanel } from "../components/InsightsPanel";
 import { useSDLCActivity } from "../hooks/useSDLCActivity";
 import { useSDLCPullRequests } from "../hooks/useSDLCPullRequests";
 import { useTimeRange } from "../state/TimeRangeContext";
@@ -30,12 +31,11 @@ export const Overview: React.FC = () => {
     const top = activity.contributors[0];
     return {
       commits: activity.totals.pushEvents,
-      builds: activity.totals.buildEvents,
       contributors: activity.totals.distinctAuthors,
       openPrs: open,
       topContributor: top?.name ?? "—",
       topContributorHint: top
-        ? `${top.prsOpened} PRs · ${top.commits} commits · ${top.builds} builds`
+        ? `${top.prsOpened} PRs · ${top.commits} commits`
         : undefined,
     };
   }, [activity, prs]);
@@ -74,7 +74,6 @@ export const Overview: React.FC = () => {
               value={stats.openPrs}
               onClick={() => navigate("/pull-requests")}
             />
-            <KpiCard label="Builds" value={stats.builds} />
             <KpiCard
               label="Contribuidores"
               value={stats.contributors}
@@ -88,6 +87,12 @@ export const Overview: React.FC = () => {
             />
           </Flex>
 
+          <InsightsPanel
+            contributors={activity.contributors}
+            prs={prs}
+            pushes={stats.commits}
+          />
+
           <Surface padding={16} elevation="raised" className="dt-hover-card">
             <Flex flexDirection="column" gap={12}>
               <Heading level={4}>Contribuidores</Heading>
@@ -100,7 +105,7 @@ export const Overview: React.FC = () => {
                       {i + 1}. {c.name}
                     </Text>
                     <Text textStyle="small">
-                      {c.prsOpened} PRs · {c.commits} commits · {c.builds} builds · {fmtRelative(c.lastActivity)}
+                      {c.prsOpened} PRs · {c.commits} commits · {fmtRelative(c.lastActivity)}
                     </Text>
                   </Flex>
                 ))
