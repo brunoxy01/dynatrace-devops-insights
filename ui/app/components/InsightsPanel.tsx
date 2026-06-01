@@ -14,10 +14,10 @@ interface Insight {
 interface Props {
   contributors: Contributor[];
   prs: PullRequest[];
-  pushes: number;
+  commits: number;
 }
 
-function buildInsights({ contributors, prs, pushes }: Props): Insight[] {
+function buildInsights({ contributors, prs, commits }: Props): Insight[] {
   const out: Insight[] = [];
   const openPrs = prs.filter((p) => p.state === "open");
 
@@ -59,10 +59,10 @@ function buildInsights({ contributors, prs, pushes }: Props): Insight[] {
   }
 
   // Ritmo de commits
-  if (pushes > 0) {
+  if (commits > 0) {
     out.push({
       severity: "info",
-      title: `${pushes} push(es) no período`,
+      title: `${commits} commit(s) no período`,
       detail:
         openPrs.length > 0
           ? `${openPrs.length} PR(s) aberto(s) acompanhando o ritmo de commits.`

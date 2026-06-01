@@ -30,7 +30,7 @@ export const Overview: React.FC = () => {
     const open = prs.filter((p) => p.state === "open").length;
     const top = activity.contributors[0];
     return {
-      commits: activity.totals.pushEvents,
+      commits: activity.totals.commits,
       contributors: activity.totals.distinctAuthors,
       openPrs: open,
       topContributor: top?.name ?? "—",
@@ -68,7 +68,7 @@ export const Overview: React.FC = () => {
       ) : (
         <>
           <Flex gap={16} flexWrap="wrap">
-            <KpiCard label="Commits / pushes" value={stats.commits} />
+            <KpiCard label="Commits" value={stats.commits} />
             <KpiCard
               label="PRs abertos"
               value={stats.openPrs}
@@ -90,7 +90,7 @@ export const Overview: React.FC = () => {
           <InsightsPanel
             contributors={activity.contributors}
             prs={prs}
-            pushes={stats.commits}
+            commits={stats.commits}
           />
 
           <Surface padding={16} elevation="raised" className="dt-hover-card">

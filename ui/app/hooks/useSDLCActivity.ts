@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useDql } from "@dynatrace-sdk/react-hooks";
 import { useTimeRange } from "../state/TimeRangeContext";
 import { matchesWatchlist } from "../config";
-import { resolveString } from "../data/eventFields";
+import { resolveString, resolveField } from "../data/eventFields";
 
 export interface Contributor {
   name: string;
@@ -16,6 +16,7 @@ export interface Contributor {
 export interface ActivitySnapshot {
   contributors: Contributor[];
   totals: {
+    commits: number;
     pushEvents: number;
     buildEvents: number;
     distinctAuthors: number;
@@ -48,6 +49,23 @@ function authorOf(r: Record<string, unknown>): string {
   ]);
 }
 
+// Número de commits dentro de um evento push. O payload do GitHub traz o
+// array `commits`; somamos seu tamanho. Fallbacks: size/distinct_size, e
+// por fim 1 (o push trouxe ao menos 1 commit).
+function commitCountOf(r: Record<string, unknown>): number {
+  const commits = resolveField(r, "commits");
+  if (Array.isArray(commits)) return commits.length || 1;
+  const size = Number(resolveString(r, ["size", "distinct_size"], ""));
+  if (Number.isFinite(size) && size > 0) return size;
+  return 1;
+}
+
+// Identificador único do push pra não contar o mesmo push duas vezes
+// (o adapter emite started + finished pra cada push).
+function pushKeyOf(r: Record<string, unknown>): string {
+  return resolveString(r, ["after", "head_commit.id", "checkout_sha", "timestamp"], "");
+}
+
 function buildQuery(fromIso: string, toIso: string): string {
   return `fetch events, from: "${fromIso}", to: "${toIso}"
 | filter event.kind == "SDLC_EVENT"
@@ -64,8 +82,18 @@ export function useSDLCActivity(): ActivitySnapshot {
   return useMemo(() => {
     const records = (data?.records ?? []) as Record<string, unknown>[];
     const matched = records.filter((r) => matchesWatchlist(repoOf(r)));
+
     const byAuthor = new Map<string, Contributor>();
-    const totals = { pushEvents: 0, buildEvents: 0, distinctAuthors: 0 };
+    const totals = { commits: 0, pushEvents: 0, buildEvents: 0, distinctAuthors: 0 };
+    const seenPush = new Set<string>();
+
+    const getContributor = (name: string): Contributor => {
+      const c =
+        byAuthor.get(name) ??
+        ({ name, prsOpened: 0, prsMerged: 0, commits: 0, builds: 0, lastActivity: "" } as Contributor);
+      byAuthor.set(name, c);
+      return c;
+    };
 
     for (const r of matched) {
       const type = String(r["event.type"] ?? "");
@@ -73,25 +101,30 @@ export function useSDLCActivity(): ActivitySnapshot {
       const ts = String(r["timestamp"] ?? "");
       const author = authorOf(r);
 
-      if (type === "push") totals.pushEvents++;
-      else if (type === "build") totals.buildEvents++;
+      if (type === "build") totals.buildEvents++;
+
+      // Commits: conta o array de commits por push único
+      if (type === "push") {
+        totals.pushEvents++;
+        const key = pushKeyOf(r);
+        if (key && !seenPush.has(key)) {
+          seenPush.add(key);
+          const n = commitCountOf(r);
+          totals.commits += n;
+          if (author) getContributor(author).commits += n;
+        }
+      }
 
       if (!author) continue;
-      const c =
-        byAuthor.get(author) ??
-        ({ name: author, prsOpened: 0, prsMerged: 0, commits: 0, builds: 0, lastActivity: ts } as Contributor);
-
+      const c = getContributor(author);
       if (type === "pull_request" && status === "started") c.prsOpened++;
       if (type === "pull_request" && status === "finished") c.prsMerged++;
-      if (type === "push") c.commits++;
       if (type === "build") c.builds++;
-
       if (ts && (!c.lastActivity || ts > c.lastActivity)) c.lastActivity = ts;
-      byAuthor.set(author, c);
     }
 
     const contributors = Array.from(byAuthor.values()).sort(
-      (a, b) => b.prsOpened + b.commits + b.builds - (a.prsOpened + a.commits + a.builds),
+      (a, b) => b.commits + b.prsOpened - (a.commits + a.prsOpened),
     );
     totals.distinctAuthors = contributors.length;
 
