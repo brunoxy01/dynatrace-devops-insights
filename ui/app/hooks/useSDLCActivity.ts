@@ -59,7 +59,7 @@ function prKeyOf(r: Record<string, unknown>): string {
   if (number) return `${repo}#${number}`;
   const branch = branchOf(r);
   if (branch) return `${repo}@${branch}`;
-  return repo;
+  return ""; // sem identificador de PR → ignora (evento workflow sem contexto)
 }
 
 function buildQuery(fromIso: string, toIso: string): string {
@@ -96,8 +96,10 @@ export function useSDLCActivity(): ActivitySnapshot {
 
       if (type === "pull_request" || type === "merge_request") {
         const key = prKeyOf(r);
-        const existing = prByKey.get(key);
-        if (!existing || ts > existing.ts) prByKey.set(key, { author, ts });
+        if (key) {
+          const existing = prByKey.get(key);
+          if (!existing || ts > existing.ts) prByKey.set(key, { author, ts });
+        }
       }
     }
 

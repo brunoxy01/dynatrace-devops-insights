@@ -161,8 +161,12 @@ export function useSDLCPullRequests(): UseSDLCPullRequestsResult {
     }
     const mapped = records.map(mapRecord);
     const matched = mapped.filter((p) => matchesWatchlist(p.repository));
+    // Descarta eventos sem identificador de PR (nem número nem branch) — são
+    // eventos derivados de workflow sem contexto de PR, viram ruído/linhas
+    // fantasma. Eventos pull_request/merge_request reais trazem ao menos a branch.
+    const identifiable = matched.filter((p) => p.number > 0 || p.branch);
     return {
-      data: dedupLatestPerPR(matched),
+      data: dedupLatestPerPR(identifiable),
       isLoading,
       rawCount: records.length,
       matchedCount: matched.length,
