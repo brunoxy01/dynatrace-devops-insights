@@ -1,36 +1,26 @@
 import React, { useMemo, useState } from "react";
 import { Flex, Surface } from "@dynatrace/strato-components/layouts";
-import { Heading, Paragraph, Text } from "@dynatrace/strato-components/typography";
+import { Heading, Paragraph, Text, ExternalLink } from "@dynatrace/strato-components/typography";
 import { DataTable } from "@dynatrace/strato-components/tables";
 import type { DataTableColumnDef } from "@dynatrace/strato-components/tables";
 import { Button } from "@dynatrace/strato-components/buttons";
 import { Chip } from "@dynatrace/strato-components/content";
-import { showToast } from "@dynatrace/strato-components/notifications";
 import type { PullRequest } from "../data/types";
 import { PROVIDERS } from "../data/types";
 import { useFilters } from "../state/FilterContext";
 import { useSDLCPullRequests } from "../hooks/useSDLCPullRequests";
 import { useTimeRange } from "../state/TimeRangeContext";
+import { repoUrl } from "../config";
 
 const providerLabel = (id: PullRequest["provider"]): string =>
   PROVIDERS.find((p) => p.id === id)?.label ?? id;
 
-const WORKFLOW_ID = "approve-pr-workflow";
-
-function triggerApproveWorkflow(pr: PullRequest): void {
-  showToast({
-    type: "info",
-    title: `Workflow disparado`,
-    message: `Aprovação de ${pr.repository} PR #${pr.number} enviada para o workflow ${WORKFLOW_ID}.`,
-    lifespan: 6000,
-  });
-}
-
 export const PullRequests: React.FC = () => {
   const { applied } = useFilters();
   const { range } = useTimeRange();
-  const { data: prsData, isLoading, rawSample, rawCount } = useSDLCPullRequests();
+  const { data: prsData, isLoading, rawSample, rawCount, dqlQuery } = useSDLCPullRequests();
   const [showRaw, setShowRaw] = useState(true);
+  const [showDql, setShowDql] = useState(false);
 
   const rows = useMemo(() => {
     return prsData.filter((p) => {
@@ -62,7 +52,15 @@ export const PullRequests: React.FC = () => {
         width: 100,
       },
       { id: "title", header: "Título", accessor: "title", width: "1fr" },
-      { id: "repo", header: "Repositório", accessor: "repository", width: 280 },
+      {
+        id: "repo",
+        header: "Repositório",
+        accessor: "repository",
+        width: 320,
+        cell: ({ rowData }) => (
+          <ExternalLink href={repoUrl(rowData.repository)}>{rowData.repository}</ExternalLink>
+        ),
+      },
       {
         id: "provider",
         header: "Provider",
@@ -72,22 +70,7 @@ export const PullRequests: React.FC = () => {
       { id: "author", header: "Autor", accessor: "author", width: 160 },
       { id: "additions", header: "Linhas +", accessor: "additions", width: 110 },
       { id: "deletions", header: "Linhas -", accessor: "deletions", width: 110 },
-      { id: "createdAt", header: "Criado em", accessor: "createdAt", width: 200 },
-      {
-        id: "actions",
-        header: "Ações",
-        accessor: () => "",
-        width: 140,
-        cell: ({ rowData }) => (
-          <Button
-            variant="accent"
-            onClick={() => triggerApproveWorkflow(rowData)}
-            aria-label={`Aprovar ${rowData.repository} #${rowData.number}`}
-          >
-            Aprovar
-          </Button>
-        ),
-      },
+      { id: "createdAt", header: "Criado em", accessor: "createdAt", width: 220 },
     ],
     [],
   );
@@ -106,11 +89,35 @@ export const PullRequests: React.FC = () => {
         </Flex>
         <Paragraph>
           {hasData
-            ? `${rows.length} PR(s) abertos · ${range.label}`
-            : `Sem eventos pull_request no Grail para ${range.label}. Verifique o webhook ou aumente o time range.`}{" "}
-          Botão <strong>Aprovar</strong> dispara um Workflow do Dynatrace que chama a API do provider.
+            ? `${rows.length} PR(s) abertos · ${range.label} · filtrando pelos repos da watchlist`
+            : `Sem eventos pull_request no Grail para ${range.label}.`}
         </Paragraph>
       </Flex>
+
+      <Surface padding={12} elevation="raised">
+        <Flex flexDirection="column" gap={8}>
+          <Flex alignItems="center" justifyContent="space-between">
+            <Text>DQL usada nesta página (cole no Notebook pra explorar)</Text>
+            <Button variant="default" onClick={() => setShowDql((v) => !v)}>
+              {showDql ? "Ocultar" : "Mostrar"}
+            </Button>
+          </Flex>
+          {showDql && (
+            <pre
+              style={{
+                margin: 0,
+                padding: 12,
+                background: "var(--dt-colors-background-surface-primary-default)",
+                fontSize: 12,
+                overflow: "auto",
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              {dqlQuery}
+            </pre>
+          )}
+        </Flex>
+      </Surface>
 
       {hasData ? (
         <DataTable data={rows} columns={columns} sortable resizable fullWidth />
@@ -118,19 +125,13 @@ export const PullRequests: React.FC = () => {
         <Surface padding={24} elevation="raised">
           <Flex flexDirection="column" gap={8} alignItems="flex-start">
             <Heading level={4}>Nenhum PR detectado no período</Heading>
-            <Paragraph>
-              Pra popular esta tela:
-            </Paragraph>
+            <Paragraph>Pra popular esta tela:</Paragraph>
             <ul style={{ margin: 0, paddingLeft: 20 }}>
               <li>
-                GitHub: confirme que o webhook tem o evento <code>Pull requests</code> habilitado
+                Confirme no GitHub que o webhook tem o evento <code>Pull requests</code> habilitado
               </li>
-              <li>
-                Aumente o time range (Last 30 minutes pode ser curto)
-              </li>
-              <li>
-                Abra ou atualize um PR pra disparar o evento
-              </li>
+              <li>Aumente o time range (Last 24h ou mais)</li>
+              <li>Abra ou atualize um PR pra disparar o evento</li>
             </ul>
           </Flex>
         </Surface>
@@ -141,8 +142,8 @@ export const PullRequests: React.FC = () => {
           <Flex flexDirection="column" gap={8}>
             <Flex alignItems="center" justifyContent="space-between">
               <Text>
-                Debug — todos os campos do primeiro evento (útil pra ajustar mapping caso a tabela
-                acima fique com colunas vazias)
+                Debug — JSON completo do primeiro evento (me copia se o autor/título estiverem
+                vazios pra eu corrigir o mapping)
               </Text>
               <Button variant="default" onClick={() => setShowRaw((v) => !v)}>
                 {showRaw ? "Ocultar" : "Mostrar"}

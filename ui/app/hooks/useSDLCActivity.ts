@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useDql } from "@dynatrace-sdk/react-hooks";
 import { useTimeRange } from "../state/TimeRangeContext";
+import { repoFilterDql } from "../config";
 
 export interface Contributor {
   name: string;
@@ -23,6 +24,8 @@ export interface ActivitySnapshot {
   isLoading: boolean;
   error?: Error;
   rawCount: number;
+  rawSample?: Record<string, unknown>;
+  dqlQuery: string;
 }
 
 const FALLBACK_QUERY = "fetch dt.entity.host | limit 0";
@@ -40,28 +43,36 @@ function authorOf(record: Record<string, unknown>): string {
     record,
     [
       "pull_request.user.login",
+      "payload.pull_request.user.login",
       "sender.login",
+      "payload.sender.login",
       "vcs.repository.change.author",
       "head_commit.author.username",
       "head_commit.author.name",
+      "payload.head_commit.author.username",
+      "payload.head_commit.author.name",
       "pusher.name",
+      "payload.pusher.name",
       "actor.login",
-      "author",
       "user.login",
+      "author",
     ],
     "",
   );
 }
 
+function buildQuery(fromIso: string, toIso: string): string {
+  return `fetch events, from: "${fromIso}", to: "${toIso}"
+| filter event.kind == "SDLC_EVENT"
+| filter ${repoFilterDql()}
+| sort timestamp desc
+| limit 1000`;
+}
+
 export function useSDLCActivity(): ActivitySnapshot {
   const { fromIso, toIso } = useTimeRange();
   const isValidRange = new Date(fromIso).getTime() < new Date(toIso).getTime() - 60_000;
-  const query = isValidRange
-    ? `fetch events, from: "${fromIso}", to: "${toIso}"
-| filter event.kind == "SDLC_EVENT"
-| sort timestamp desc
-| limit 1000`
-    : FALLBACK_QUERY;
+  const query = isValidRange ? buildQuery(fromIso, toIso) : FALLBACK_QUERY;
 
   const { data, isLoading, error } = useDql({ query });
 
@@ -120,6 +131,8 @@ export function useSDLCActivity(): ActivitySnapshot {
       isLoading,
       error: error as Error | undefined,
       rawCount: records.length,
+      rawSample: records[0] as Record<string, unknown> | undefined,
+      dqlQuery: query,
     };
-  }, [data, isLoading, error]);
+  }, [data, isLoading, error, query]);
 }
