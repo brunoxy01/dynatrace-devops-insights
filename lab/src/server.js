@@ -1,5 +1,6 @@
 const express = require("express");
 
+// Pipeline trigger: validate SDLC event ingestion for the DevOps Insights app
 const PORT = process.env.PORT || 3000;
 const SERVICE_NAME = process.env.SERVICE_NAME || "devops-insights-lab";
 const RELEASE_VERSION = process.env.RELEASE_VERSION || "0.1.0";

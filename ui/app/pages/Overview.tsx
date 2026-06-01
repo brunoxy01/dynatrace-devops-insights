@@ -2,187 +2,121 @@ import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Flex, Surface } from "@dynatrace/strato-components/layouts";
 import { Heading, Paragraph, Text } from "@dynatrace/strato-components/typography";
+import { Chip } from "@dynatrace/strato-components/content";
 import { KpiCard } from "../components/KpiCard";
-import { BranchStrategyBadge } from "../components/BranchStrategyBadge";
-import { DynatraceIntelligencePanel } from "../components/DynatraceIntelligencePanel";
-import {
-  commits,
-  deploys,
-  developers,
-  filterByTimeRange,
-  pullRequests,
-  repositories,
-} from "../data/mockData";
-import {
-  filterBuilds,
-  filterCommits,
-  filterDeploys,
-  filterDevelopers,
-  filterPullRequests,
-  filterRepositories,
-} from "../data/applyFilters";
-import { useFilters } from "../state/FilterContext";
+import { InsightsPanel } from "../components/InsightsPanel";
+import { useSDLCActivity } from "../hooks/useSDLCActivity";
+import { useSDLCPullRequests } from "../hooks/useSDLCPullRequests";
 import { useTimeRange } from "../state/TimeRangeContext";
-import { useSDLCBuilds } from "../hooks/useSDLCBuilds";
-import { inferBranchStrategy, strategyDistribution } from "../data/branchStrategy";
-import type { BranchStrategy, Repository } from "../data/types";
+import { PROVIDERS, type Provider } from "../data/types";
+
+const providerLabel = (id: Provider): string =>
+  PROVIDERS.find((p) => p.id === id)?.label ?? id;
+
+const fmtRelative = (iso: string): string => {
+  if (!iso) return "—";
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60_000);
+  if (m < 1) return "agora há pouco";
+  if (m < 60) return `há ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `há ${h}h`;
+  return `há ${Math.floor(h / 24)}d`;
+};
 
 export const Overview: React.FC = () => {
   const navigate = useNavigate();
-  const { applied } = useFilters();
-  const { fromIso, toIso, range } = useTimeRange();
-  const { data: buildsData, source: buildsSource } = useSDLCBuilds();
-
-  const filtered = useMemo(() => {
-    const repos = filterRepositories(repositories, applied);
-    const repoSet = new Set(repos.map((r) => r.fullName));
-    const devs = filterDevelopers(developers, applied);
-    const prs = filterByTimeRange(filterPullRequests(pullRequests, applied, repoSet), fromIso, toIso);
-    const cms = filterByTimeRange(filterCommits(commits, applied, repoSet), fromIso, toIso);
-    const fbuilds = filterByTimeRange(filterBuilds(buildsData, applied, repoSet), fromIso, toIso);
-    const fdeploys = filterByTimeRange(filterDeploys(deploys, applied, repoSet), fromIso, toIso);
-    return { repos, devs, prs, cms, builds: fbuilds, deploys: fdeploys };
-  }, [applied, fromIso, toIso, buildsData]);
+  const { range } = useTimeRange();
+  const activity = useSDLCActivity();
+  const { data: prs, matchedCount: prMatched } = useSDLCPullRequests();
 
   const stats = useMemo(() => {
-    const succBuilds = filtered.builds.filter((b) => b.status === "success").length;
-    const failBuilds = filtered.builds.filter((b) => b.status === "failure").length;
-    const buildSuccessRate =
-      filtered.builds.length > 0
-        ? Math.round((succBuilds / (succBuilds + failBuilds || 1)) * 100)
-        : 0;
-    const prodDeploys = filtered.deploys.filter((d) => d.environment === "production");
-    const deployFrequency = Math.max(1, Math.round(prodDeploys.length / 7));
-    const avgLeadTime = Math.round(
-      filtered.devs.reduce((a, d) => a + d.avgLeadTimeHours, 0) / Math.max(filtered.devs.length, 1),
-    );
-    const topDev = [...filtered.devs].sort((a, b) => b.commitsLast30d - a.commitsLast30d)[0];
+    const open = prs.filter((p) => p.state === "open").length;
+    const top = activity.contributors[0];
     return {
-      totalCommits: filtered.cms.length || filtered.devs.reduce((a, d) => a + d.commitsLast30d, 0),
-      totalBranches: filtered.repos.reduce((acc, r) => acc + r.openBranches, 0),
-      openRepos: filtered.repos.filter((r) => !r.isArchived).length,
-      openPrs: filtered.prs.filter((p) => p.state === "open").length,
-      buildSuccessRate,
-      buildsCount: filtered.builds.length,
-      deployFrequency,
-      avgLeadTime,
-      topDev,
-      devCount: filtered.devs.length,
-      distribution: strategyDistribution(filtered.repos),
-      deploysCount: filtered.deploys.length,
+      contributors: activity.totals.distinctAuthors,
+      openPrs: open,
+      topContributor: top?.name ?? "—",
+      topContributorHint: top
+        ? `${providerLabel(top.provider)} · ${top.prsOpen} PR(s) aberto(s)`
+        : undefined,
     };
-  }, [filtered]);
+  }, [activity, prs]);
 
-  const reposByStrategy = useMemo(() => {
-    const grouped: Record<BranchStrategy, Repository[]> = {
-      gitflow: [],
-      "trunk-based": [],
-      none: [],
-    };
-    filtered.repos.forEach((r) => grouped[inferBranchStrategy(r)].push(r));
-    return grouped;
-  }, [filtered.repos]);
+  const hasData = activity.matchedCount > 0 || prMatched > 0;
 
   return (
     <Flex flexDirection="column" padding={24} gap={24}>
       <Flex flexDirection="column" gap={4}>
-        <Heading>DevOps Insights</Heading>
-        <Paragraph>
-          Visão consolidada de produtividade de engenharia · {range.label} · fonte:{" "}
-          {buildsSource === "grail" ? "SDLC events (Grail)" : "mock data (sem ingestão detectada)"}
-        </Paragraph>
+        <Flex alignItems="center" gap={12}>
+          <Heading>DevOps Insights</Heading>
+          <Chip color={hasData ? "success" : "neutral"}>
+            {hasData ? "dados reais (Grail)" : "sem dados"}
+          </Chip>
+          {activity.isLoading && <Text>carregando…</Text>}
+        </Flex>
+        <Paragraph>Produtividade de engenharia · {range.label}</Paragraph>
       </Flex>
 
-      <Flex gap={16} flexWrap="wrap">
-        <KpiCard
-          label="Commits"
-          value={stats.totalCommits}
-          hint={`${stats.devCount} devs ativos`}
-          onClick={() => navigate("/developers")}
-        />
-        <KpiCard
-          label="PRs / MRs abertos"
-          value={stats.openPrs}
-          onClick={() => navigate("/pull-requests")}
-        />
-        <KpiCard
-          label="Deploys"
-          value={stats.deploysCount}
-          hint={`~${stats.deployFrequency}/dia prod`}
-          onClick={() => navigate("/releases")}
-        />
-        <KpiCard label="Lead time PR" value={`${stats.avgLeadTime}h`} hint="média devs" />
-        <KpiCard
-          label="Top contribuidor"
-          value={stats.topDev?.name ?? "—"}
-          hint={stats.topDev ? `${stats.topDev.commitsLast30d} commits` : undefined}
-          onClick={() => navigate("/developers")}
-        />
-      </Flex>
-
-      <DynatraceIntelligencePanel
-        repos={filtered.repos}
-        prs={filtered.prs}
-        builds={filtered.builds}
-        deploys={filtered.deploys}
-        devs={filtered.devs}
-      />
-
-      <Surface padding={16} elevation="raised" className="dt-hover-card">
-        <Flex flexDirection="column" gap={16}>
-          <Heading level={4}>Distribuição de estratégia de branch</Heading>
-          <Flex gap={24} flexWrap="wrap">
-            {(Object.keys(reposByStrategy) as BranchStrategy[]).map((s) => (
-              <Flex
-                key={s}
-                flexDirection="column"
-                gap={8}
-                style={{ minWidth: 260, flex: 1 }}
-              >
-                <Flex alignItems="center" gap={12}>
-                  <BranchStrategyBadge strategy={s} />
-                  <Text>{reposByStrategy[s].length} repos</Text>
-                </Flex>
-                <Flex flexDirection="column" gap={2}>
-                  {reposByStrategy[s].length === 0 ? (
-                    <Text textStyle="small">—</Text>
-                  ) : (
-                    reposByStrategy[s].map((r) => (
-                      <Text
-                        key={r.id}
-                        onClick={() => navigate(`/repositories`)}
-                        style={{ cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}
-                      >
-                        {r.fullName}
-                      </Text>
-                    ))
-                  )}
-                </Flex>
-              </Flex>
-            ))}
+      {!hasData && !activity.isLoading ? (
+        <Surface padding={24} elevation="raised">
+          <Flex flexDirection="column" gap={8} alignItems="flex-start">
+            <Heading level={4}>Sem eventos no período</Heading>
+            <Paragraph>
+              Abra um PR, faça um push ou rode o workflow. Se já fez, aumente o time range no
+              canto superior direito.
+            </Paragraph>
           </Flex>
-        </Flex>
-      </Surface>
+        </Surface>
+      ) : (
+        <>
+          <Flex gap={16} flexWrap="wrap">
+            <KpiCard
+              label="PRs abertos"
+              value={stats.openPrs}
+              onClick={() => navigate("/pull-requests")}
+            />
+            <KpiCard
+              label="Contribuidores"
+              value={stats.contributors}
+              onClick={() => navigate("/developers")}
+            />
+            <KpiCard
+              label="Top contribuidor"
+              value={stats.topContributor}
+              hint={stats.topContributorHint}
+              onClick={() => navigate("/developers")}
+            />
+          </Flex>
 
-      <Surface padding={16} elevation="raised" className="dt-hover-card">
-        <Flex flexDirection="column" gap={12}>
-          <Heading level={4}>Top 5 contribuidores</Heading>
-          {filtered.devs
-            .slice()
-            .sort((a, b) => b.commitsLast30d - a.commitsLast30d)
-            .slice(0, 5)
-            .map((d, i) => (
-              <Flex key={d.id} justifyContent="space-between" alignItems="center">
-                <Text>
-                  {i + 1}. {d.name} · {d.email}
-                </Text>
-                <Text>
-                  {d.commitsLast30d} commits · {d.pullRequestsMerged} PRs mergeados
-                </Text>
-              </Flex>
-            ))}
-        </Flex>
-      </Surface>
+          <InsightsPanel contributors={activity.contributors} prs={prs} />
+
+          <Surface padding={16} elevation="raised" className="dt-hover-card">
+            <Flex flexDirection="column" gap={12}>
+              <Heading level={4}>Contribuidores</Heading>
+              {activity.contributors.length === 0 ? (
+                <Text>Nenhum contribuidor identificado no período.</Text>
+              ) : (
+                activity.contributors.map((c, i) => (
+                  <Flex
+                    key={`${c.provider}|${c.name}`}
+                    justifyContent="space-between"
+                    alignItems="center"
+                  >
+                    <Text>
+                      {i + 1}. {c.name}{" "}
+                      <Text textStyle="small">· {providerLabel(c.provider)}</Text>
+                    </Text>
+                    <Text textStyle="small">
+                      {c.prsOpen} PR(s) · {fmtRelative(c.lastActivity)}
+                    </Text>
+                  </Flex>
+                ))
+              )}
+            </Flex>
+          </Surface>
+        </>
+      )}
     </Flex>
   );
 };

@@ -13,11 +13,8 @@ export const Header = () => {
         <AppHeader.NavItem as={Link} to="/pull-requests">
           PRs / MRs
         </AppHeader.NavItem>
-        <AppHeader.NavItem as={Link} to="/releases">
-          Release Comparison
-        </AppHeader.NavItem>
         <AppHeader.NavItem as={Link} to="/developers">
-          Desenvolvedores
+          Contribuidores
         </AppHeader.NavItem>
       </AppHeader.NavItems>
     </AppHeader>
