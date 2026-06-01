@@ -1,15 +1,18 @@
 import React, { useMemo } from "react";
 import { Flex } from "@dynatrace/strato-components/layouts";
-import { Heading, Paragraph } from "@dynatrace/strato-components/typography";
+import { Heading, Paragraph, Text } from "@dynatrace/strato-components/typography";
 import { DataTable } from "@dynatrace/strato-components/tables";
 import type { DataTableColumnDef } from "@dynatrace/strato-components/tables";
 import { Button } from "@dynatrace/strato-components/buttons";
+import { Chip } from "@dynatrace/strato-components/content";
 import { showToast } from "@dynatrace/strato-components/notifications";
-import { pullRequests, repositories } from "../data/mockData";
+import { repositories } from "../data/mockData";
 import { filterPullRequests, filterRepositories } from "../data/applyFilters";
 import type { PullRequest } from "../data/types";
 import { PROVIDERS } from "../data/types";
 import { useFilters } from "../state/FilterContext";
+import { useSDLCPullRequests } from "../hooks/useSDLCPullRequests";
+import { useTimeRange } from "../state/TimeRangeContext";
 
 const providerLabel = (id: PullRequest["provider"]): string =>
   PROVIDERS.find((p) => p.id === id)?.label ?? id;
@@ -27,11 +30,13 @@ function triggerApproveWorkflow(pr: PullRequest): void {
 
 export const PullRequests: React.FC = () => {
   const { applied } = useFilters();
+  const { range } = useTimeRange();
+  const { data: prsData, source, isLoading } = useSDLCPullRequests();
 
   const rows = useMemo(() => {
     const repoSet = new Set(filterRepositories(repositories, applied).map((r) => r.fullName));
-    return filterPullRequests(pullRequests, applied, repoSet).filter((p) => p.state === "open");
-  }, [applied]);
+    return filterPullRequests(prsData, applied, repoSet).filter((p) => p.state === "open");
+  }, [applied, prsData]);
 
   const columns = useMemo<DataTableColumnDef<PullRequest>[]>(
     () => [
@@ -42,7 +47,7 @@ export const PullRequests: React.FC = () => {
         width: 100,
       },
       { id: "title", header: "Título", accessor: "title", width: "1fr" },
-      { id: "repo", header: "Repositório", accessor: "repository", width: 220 },
+      { id: "repo", header: "Repositório", accessor: "repository", width: 240 },
       {
         id: "provider",
         header: "Provider",
@@ -74,11 +79,19 @@ export const PullRequests: React.FC = () => {
 
   return (
     <Flex flexDirection="column" padding={24} gap={16}>
-      <Flex flexDirection="column" gap={4}>
-        <Heading level={2}>Pull / Merge Requests abertos</Heading>
+      <Flex flexDirection="column" gap={4} alignItems="flex-start">
+        <Flex alignItems="center" gap={12}>
+          <Heading level={2}>Pull / Merge Requests abertos</Heading>
+          <Chip color={source === "grail" ? "success" : "neutral"}>
+            {source === "grail" ? "SDLC events (Grail)" : "mock"}
+          </Chip>
+          {isLoading && <Text>carregando…</Text>}
+        </Flex>
         <Paragraph>
-          Lista de PRs e MRs abertos. Botão <strong>Aprovar</strong> dispara um Workflow do
-          Dynatrace que chama a API do provider.
+          {source === "grail"
+            ? `${rows.length} PRs/MRs abertos vindos dos webhooks do GitHub/GitLab/Azure DevOps · ${range.label}`
+            : "Sem ingestão SDLC detectada — mostrando mock data. Configure webhooks pra ver dados reais (ver README)."}{" "}
+          Botão <strong>Aprovar</strong> dispara um Workflow do Dynatrace que chama a API do provider.
         </Paragraph>
       </Flex>
       <DataTable data={rows} columns={columns} sortable resizable fullWidth />

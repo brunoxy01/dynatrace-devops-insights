@@ -1,0 +1,79 @@
+name: lab-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "lab/**"
+      - ".github/workflows/lab-ci.yml"
+  pull_request:
+    paths:
+      - "lab/**"
+      - ".github/workflows/lab-ci.yml"
+
+# Cancela runs anteriores no mesmo PR/branch
+concurrency:
+  group: lab-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lab
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: lab/package-lock.json
+      - run: npm ci || npm install
+      - run: npm test
+
+  build:
+    name: Build container
+    needs: test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lab
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: |
+          IMAGE="devops-insights-lab:${{ github.sha }}"
+          docker build -t "$IMAGE" .
+          echo "Built $IMAGE"
+
+  deploy-staging:
+    name: Deploy to staging (simulated)
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Fake deploy
+        run: |
+          echo "Deploying SHA ${{ github.sha }} to staging…"
+          sleep 3
+          echo "Deployed."
+
+  deploy-production:
+    name: Deploy to production (simulated)
+    needs: deploy-staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Fake deploy
+        run: |
+          echo "Deploying SHA ${{ github.sha }} to production…"
+          sleep 3
+          echo "Deployed."

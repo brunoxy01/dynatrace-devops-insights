@@ -1,0 +1,14 @@
+{
+  "name": "devops-insights-lab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tiny Express service used as a CI/CD pipeline target to generate SDLC events that feed the DevOps Insights app and the community CI/CD Observability app.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/server.test.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

@@ -101,21 +101,9 @@ export const Overview: React.FC = () => {
           onClick={() => navigate("/developers")}
         />
         <KpiCard
-          label="Repositórios ativos"
-          value={stats.openRepos}
-          onClick={() => navigate("/repositories")}
-        />
-        <KpiCard label="Branches abertos" value={stats.totalBranches} onClick={() => navigate("/repositories")} />
-        <KpiCard
           label="PRs / MRs abertos"
           value={stats.openPrs}
           onClick={() => navigate("/pull-requests")}
-        />
-        <KpiCard
-          label="Builds"
-          value={stats.buildsCount}
-          hint={`${stats.buildSuccessRate}% sucesso`}
-          onClick={() => navigate("/builds")}
         />
         <KpiCard
           label="Deploys"

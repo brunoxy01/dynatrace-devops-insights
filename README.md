@@ -1,153 +1,100 @@
 # DevOps Insights
 
-App Dynatrace que consolida métricas de produtividade de engenharia: commits, PRs/MRs, builds, deploys, estratégia de branch e comparação entre releases — tudo correlacionado com o que já existe no Grail (SDLC events) e com o app **CI/CD Observability**.
+App Dynatrace que complementa o app oficial [**Community CI/CD Observability**](https://www.dynatrace.com/hub/detail/community-cicd-observability/), oferecendo visões adicionais sobre **PRs/MRs abertos**, **comparação entre releases** e produtividade dos desenvolvedores. Todo o dado vem dos **SDLC events ingeridos no Grail** — pela mesma config de webhook que alimenta o app da comunidade.
 
 | App ID | Environment |
 |---|---|
-| `my.devops.insights` | `https://bwm98081.apps.dynatrace.com/` |
+| `my.devops.insights` | `https://bwm98081.apps.dynatrace.com/ui/apps/my.devops.insights` |
 
-## Telas
+## Estrutura do repositório
 
-> Screenshots em [`docs/screenshots/`](docs/screenshots/) — adicione conforme indicado no [README de lá](docs/screenshots/README.md).
+```
+.
+├── ui/app/                  → Código do app Dynatrace (React + Strato)
+├── lab/                     → Hello World Express usado pra gerar SDLC events reais
+├── .github/workflows/       → CI do lab (gera builds/deploys → eventos no Grail)
+├── docs/screenshots/        → Imagens referenciadas pelo README (anexar manualmente)
+└── README.md
+```
 
-- **Overview** — KPIs (commits, repos, branches, PRs, builds com taxa de sucesso, deploys, lead time), painel **Dynatrace Intelligence** com anomalias automáticas, distribuição de estratégia de branch por repositório, top 5 contribuidores. → `docs/screenshots/overview.png`
-- **Release Comparison** — compara latest vs previous release de uma aplicação: error rate, response time, throughput, Davis problems, PRs e commits que entraram entre as duas. → `docs/screenshots/release-comparison.png`
-- **Builds** — cards agrupados por status (rodando / falha / sucesso / cancelado) com repo, branch, commit, autor, duração. → `docs/screenshots/builds.png`
-- **PRs / MRs** — lista com botão `Aprovar` que dispara um workflow do Dynatrace via toast (stub). → `docs/screenshots/pull-requests.png`
-- **Repositórios** — lista com link pro repositório no GitHub, badge da estratégia inferida, service linkado. → `docs/screenshots/repositories.png`
-- **Desenvolvedores** — ranking por commits / PRs / lead time.
+## Telas do app
+
+- **Overview** — KPIs (commits, PRs, deploys, lead time, top contributor), **Dynatrace Intelligence** (anomalias automáticas) e distribuição de estratégia de branch
+- **PRs / MRs** — lista de PRs/MRs abertos lidos do Grail (`event.type == "change"`). Botão **Aprovar** dispara workflow stub
+- **Release Comparison** — latest vs previous side-by-side com delta em error rate / response time / throughput / Davis problems / PRs incluídos
+- **Desenvolvedores** — ranking por commits, PRs, lead time
+
+> Screenshots em [`docs/screenshots/`](docs/screenshots/) — anexe manualmente conforme os nomes referenciados no [README de lá](docs/screenshots/README.md).
 
 ## Stack
 
 - React 18 + TypeScript
-- [Strato Design System](https://developer.dynatrace.com/design/) (`@dynatrace/strato-components`, `@dynatrace/strato-components-preview`)
-- `@dynatrace-sdk/react-hooks` para queries DQL (`useDql`)
-- `@dynatrace-sdk/navigation` para navegar entre apps (`openApp`)
-- react-router-dom para roteamento interno
-
-## Arquitetura
-
-```
-ui/app/
-├── App.tsx                          Page (Strato) + Routes + Providers
-├── components/
-│   ├── BranchStrategyBadge.tsx      Badge colorido por estratégia
-│   ├── DynatraceIntelligencePanel.tsx  Painel de insights automáticos
-│   ├── FilterBar.tsx                Provider + Strategy + TimeframeSelector
-│   ├── Header.tsx                   AppHeader Strato
-│   ├── KpiCard.tsx                  Card com hover gradient border
-│   └── TimeRangeFilter.tsx          Wrapper do TimeframeSelector
-├── data/
-│   ├── branchStrategy.ts            Heurística gitflow/trunk/none
-│   ├── mockData.ts                  Fallback quando não há SDLC events
-│   └── types.ts                     Provider, Developer, Repository, PullRequest, Build, Deploy, Release
-├── hooks/
-│   └── useSDLCBuilds.ts             useDql + fallback pra mock
-├── pages/
-│   ├── Overview.tsx                 KPIs + Intelligence + branch dist
-│   ├── ReleaseComparison.tsx        Latest vs Previous side-by-side
-│   ├── Builds.tsx                   Cards agrupados
-│   ├── PullRequests.tsx             Tabela + botão Aprovar
-│   ├── Repositories.tsx             Tabela com link
-│   └── Developers.tsx               Ranking
-├── state/                           Contexts (provider, strategy, time range)
-├── styles/animations.css            Hover gradient border (conic-gradient)
-└── utils/navigation.ts              openApp + fallback window.open
-```
+- [Strato Design System](https://developer.dynatrace.com/design/) — `@dynatrace/strato-components`, `@dynatrace/strato-components-preview`
+- `@dynatrace-sdk/react-hooks` — `useDql` pra queries em Grail
+- `@dynatrace-sdk/navigation` — `openApp` pra abrir CI/CD Observability inline
+- `FilterField` do Strato pra filtros (provider, strategy, repository, application, environment, author, branch)
 
 ## Como rodar localmente
 
 ```bash
-# Node 24 recomendado (Node 25+ funciona com warning)
-node --version
-
-# instalar deps
+# Node 24 recomendado
 npm install
-
-# subir dev server (abre o app via tunnel do Dynatrace)
-npm run start
-# ou: npx dt-app dev
+npm run start          # ou: npx dt-app dev
 ```
 
-A CLI imprime dois links:
-- `http://localhost:3000/ui` — preview local cru
-- `https://bwm98081.apps.dynatrace.com/ui/apps/local-dev-server/?locationAppIds=...` — preview rodando **dentro** do seu tenant Dynatrace, com OAuth do usuário e acesso a Grail/DQL real
+A CLI imprime dois links: o `http://localhost:3000/ui` (preview cru) e o de dentro do tenant (com OAuth + Grail real).
 
-## Como os dados chegam no app
+## Como fazer deploy na tenant
 
-O app consome **dois tipos de fonte** com fallback automático:
-
-### 1. SDLC events (Grail) — fonte primária
-
-Quando há ingestão de SDLC events no tenant, o hook [`useSDLCBuilds`](ui/app/hooks/useSDLCBuilds.ts) executa via `useDql`:
-
-```dql
-fetch events, from: "<from>", to: "<to>"
-| filter event.kind == "SDLC_EVENT"
-| filter event.type == "build" or event.type == "task"
-| filter event.category == "task"
-| sort timestamp desc
-| limit 200
+```bash
+npx dt-app deploy
 ```
 
-Os registros são mapeados pros campos da semantic dictionary (`vcs.repository.url`, `vcs.repository.commit.sha`, `vcs.repository.change.author`, `cicd.pipeline.name`, `event.status`, etc).
+O deploy registra como `my.devops.insights`. Pra reverter: `npx dt-app uninstall`.
 
-### 2. Mock data — fallback
+---
 
-Se a query retorna 0 records ou erro, o app cai pra `mockData.ts` e exibe na UI: **"fonte: mock data (sem ingestão detectada)"**. Útil pra desenvolvimento, demo e onboarding.
+## Ingestão de SDLC events
 
-## Como ingerir SDLC events no Dynatrace
+O app não ingere eventos — ele **consome** o que já está no Grail. A ingestão é feita via webhooks do provider apontando pro endpoint Custom Events da Dynatrace.
 
-Pra alimentar o app com dados reais, configure **Pipeline Observability** seguindo um destes caminhos (todos populam `event.kind == "SDLC_EVENT"` no Grail):
+### Endpoint pelo tipo de tenant
 
-### Opção A — Plugin oficial no seu CI/CD
-
-A Dynatrace mantém plugins/actions oficiais que ingerem eventos sem código:
-
-| Plataforma | Ferramenta |
+| Tipo de tenant | Endpoint base |
 |---|---|
-| GitHub Actions | [`dynatrace-platform-monitoring/sdlc-actions`](https://github.com/Dynatrace) |
-| GitLab CI | Template `sdlc-events` (component catalog) |
-| Jenkins | Plugin oficial Dynatrace |
-| Azure DevOps | Extension marketplace |
+| **Gen3 (apenas `.apps.dynatrace.com`)** | `https://<ENV-ID>.apps.dynatrace.com/platform/ingest/custom/events.sdlc/<provider>` |
+| **Clássico (`.live.dynatrace.com`)** | `https://<ENV-ID>.live.dynatrace.com/platform/ingest/custom/events.sdlc/<provider>` |
 
-Cada plugin captura eventos de:
-- **change** — abertura/fechamento de PR/MR
-- **build / task** — início e fim de cada etapa do pipeline
-- **deployment** — deploy iniciado e finalizado
-- **validation** — testes, gates de qualidade
-- **pipeline** — execução completa
+Substitua `<provider>` por `github`, `gitlab` ou `azuredevops`.
 
-### Opção B — API direta (Generic Events Ingest)
+### Token necessário
 
-Envie POST pra `/platform/ingest/v1/events` com payload no formato:
+- **Tipo:** Access Token (formato `dt0c01.XXX.YYY`)
+- **Scope obrigatório:** `events.ingest`
+- **Onde gerar:** Settings → Access Tokens → Generate new token, marque `Ingest events` (também aceito como `storage:events:write` em algumas versões)
 
-```json
-{
-  "event.kind": "SDLC_EVENT",
-  "event.category": "task",
-  "event.type": "build",
-  "event.status": "finished",
-  "event.outcome": "success",
-  "cicd.pipeline.name": "payments-api/main",
-  "vcs.repository.url": "https://github.com/Dynatrace/payments-api",
-  "vcs.repository.commit.sha": "abc123…",
-  "vcs.repository.change.author": "bruno.silva@dynatrace.com",
-  "duration": 187000000000,
-  "timestamp": "2026-05-22T10:00:00Z"
-}
+> Em tenants Gen3 modernos, talvez seja necessário usar **Platform Token** (criado via OAuth client) em vez de Access Token clássico. Se o `Api-Token` retornar 401 mesmo com scope correto, tente Platform Token.
+
+### Troubleshooting do 401
+
+| Sintoma | Causa provável | Fix |
+|---|---|---|
+| 401 `Authentication required` | URL com `.live.` em tenant Gen3 | Trocar pra `.apps.dynatrace.com` |
+| 401 mesmo com URL correta | Scope `events.ingest` faltando no token | Recriar token com a permissão certa |
+| 401 só nesse endpoint, outros funcionam | Tenant exige Platform Token | Criar via OAuth client com escopo `storage:events:write` |
+| 404 | URL errada (provider name) | Confira: `github` / `gitlab` / `azuredevops` (sem hifens) |
+
+Teste rápido:
+
+```bash
+curl -i -X POST \
+  -H "Authorization: Api-Token <SEU_TOKEN>" \
+  -H "Content-Type: application/json" \
+  "https://bwm98081.apps.dynatrace.com/platform/ingest/custom/events.sdlc/gitlab" \
+  -d '{"event.type":"test"}'
 ```
 
-### Opção C — OpenTelemetry
-
-Se seu pipeline já emite traces OTel, configure o exporter pro endpoint Dynatrace. SDLC events viram spans com os mesmos atributos da semantic dictionary.
-
-**Referências oficiais:**
-- [Pipeline Observability docs](https://docs.dynatrace.com/docs/deliver/pipeline-observability-sdlc-events)
-- [Semantic Dictionary — SDLC events](https://docs.dynatrace.com/docs/semantic-dictionary/model/sdlc-events)
-- [DQL fetch events](https://docs.dynatrace.com/docs/platform/grail/dynatrace-query-language/commands/data-source-commands)
-
-Depois de configurar a ingestão, valide rodando no Notebook:
+`200 OK` ou `202 Accepted` = ingestão ativa. Valide depois no Notebook:
 
 ```dql
 fetch events
@@ -155,49 +102,83 @@ fetch events
 | summarize count(), by: {event.type, event.status}
 ```
 
-## Custo / Billing no Dynatrace
+---
 
-O app em si **não** é cobrado — apps customizados rodam dentro do tenant sem licença extra (o consumo é do usuário/tempo de uso que já está incluso no platform subscription).
+## Configuração dos webhooks por provider
 
-O que **gera consumo** é o que ele consulta:
+### GitLab (mais simples — sem proxy)
 
-### 1. Storage de SDLC events no Grail
+1. Repo → Settings → Webhooks → Add new webhook
+2. **URL:** `https://<ENV-ID>.apps.dynatrace.com/platform/ingest/custom/events.sdlc/gitlab`
+3. **Custom header:** `Authorization: Api-Token <TOKEN>`
+4. **Triggers:** Merge request events, Job events, Pipeline events, Deployment events, Releases events
+5. Save → "Test" → confira que o request volta 2xx
 
-Cada SDLC event ingerido conta como **bizevents/log retention** dependendo do bucket configurado:
+### Azure DevOps (também sem proxy)
 
-| Recurso | Métrica de billing | Unidade |
-|---|---|---|
-| Ingestão de events | `events` ingest | **DDU** (Davis Data Units) — ou GiB se contratado por volume |
-| Retention de events | Days of retention × volume | DDU/dia |
+1. Project Settings → Service Hooks → Create subscription → **Web Hooks**
+2. Crie **uma subscription por trigger** (sim, várias):
+   - Build completed
+   - Run job state changed
+   - Run state changed
+   - Pull request created
+   - Pull request updated
+   - Release deployment started / completed / approval completed / approval pending
+3. Pra cada: URL `https://<ENV-ID>.apps.dynatrace.com/platform/ingest/custom/events.sdlc/azuredevops`, HTTP header `Authorization: Api-Token <TOKEN>`
 
-Cálculo: ~1 KB por evento × volume diário × dias de retenção. Um pipeline com 1000 builds/dia × 90 dias de retenção ≈ ~90 MB armazenados — quantidade pequena.
+### GitHub (precisa de proxy)
 
-### 2. Queries DQL (CPU usage)
+O GitHub não suporta custom HTTP headers em webhooks e a Dynatrace não verifica HMAC-SHA256, então precisa de proxy.
 
-Cada `useDql` que esse app executa consome **DPS** (Davis Platform Seconds — substituto do antigo DDU pra queries):
+**Opção A (recomendada) — Function/Lambda como proxy:**
 
-- `fetch events | filter event.kind == "SDLC_EVENT"` rodando a cada filtro → ~1-5 DPS por query
-- Cache de 60s no `useDql` (default) — refetch automático só após expiração
-- Time range maior = mais bytes escaneados → mais DPS
+```
+GitHub webhook  →  Cloud Function (verifica HMAC + adiciona Authorization header)  →  Dynatrace
+```
 
-**Boas práticas implementadas no app pra reduzir custo:**
+**Opção B (sandbox apenas):** Token na query string — *não usar em produção*:
 
-- `staleTime: 60000` (default do `useDql`) — usa cache se a query rodou nos últimos 60s
-- Limite explícito `| limit 200` nas queries de builds
-- Filtro por timeframe estrito (TimeframeSelector controla `from`/`to` na query, não scaneia tudo)
-- Guard em `useSDLCBuilds`: se `from === to` ou range inválido → não dispara DQL
-- Filtros client-side (provider, strategy) aplicados sobre os records já retornados — não disparam novas queries
+```
+URL: https://<ENV-ID>.apps.dynatrace.com/platform/ingest/custom/events.sdlc/github?api-token=<TOKEN>
+```
 
-### 3. Workflows (botão Aprovar)
+No GitHub: Repo Settings → Webhooks → Add webhook
+- Payload URL: a URL acima
+- Content type: `application/json`
+- Events: Pull requests, Workflow runs, Workflow jobs (desmarque Pushes pra não floodar)
+- Active: ✓
 
-Cada execução de Workflow que o botão **Aprovar** dispara conta como:
+---
 
-- Function execution time (segundos) → DPS
-- API calls externas (GitHub/GitLab) — só consumo do provider, não do Dynatrace
+## Lab — pipeline de teste
 
-### 4. Monitoramento de quanto está custando
+A pasta [`lab/`](lab/) tem um Hello-World Express com Dockerfile + testes + workflow GitHub Actions (`.github/workflows/lab-ci.yml`). Ele existe pra **gerar SDLC events reais** sem precisar do código real de produção.
 
-Use o app **Account Management** ou o Notebook:
+Loop pra testar o app oficial e o nosso:
+
+1. `git checkout -b feat/lab-touch` → mexer em qualquer coisa em `lab/`
+2. `git push -u origin feat/lab-touch`
+3. Abrir PR no GitHub
+4. O workflow `lab-ci` roda → gera builds/deploys
+5. O webhook GitHub configurado dispara → `event.type == "change"` cai no Grail
+6. Abrir o app **DevOps Insights** (rota `/pull-requests`) → o PR deve aparecer com o badge `SDLC events (Grail)`
+7. Abrir o **Community CI/CD Observability** → confere se ele também enxerga
+
+Mais detalhes em [`lab/README.md`](lab/README.md).
+
+---
+
+## Custo / Billing
+
+- **O app em si não é cobrado** — apps customizados rodam dentro do platform subscription
+- **SDLC events ingeridos** consomem DDU (storage de events) — ~1 KB por evento. Pipeline com 1000 builds/dia × 90 dias retention ≈ 90 MB
+- **Queries DQL** (`useDql`) consomem DPS. Otimizações já aplicadas:
+  - `staleTime` default de 60s — cache entre rerenders
+  - `| limit 200` explícito nas queries
+  - Guard contra `from === to` (não dispara DQL inválido)
+  - Filtros aplicados client-side sobre os records — não disparam novas queries
+
+Pra monitorar:
 
 ```dql
 fetch dt.system.events
@@ -205,16 +186,11 @@ fetch dt.system.events
 | summarize sum(value), by: {bin(timestamp, 1d), license.type}
 ```
 
-**Resumo:** o app foi desenhado pra ser **cost-light** — depende quase totalmente de queries pontuais a SDLC events que você já está ingerindo pro CI/CD Observability. Não duplica armazenamento, não roda jobs em background, não polla métricas em loop.
+---
 
 ## Roadmap
 
-- [ ] Approvação real de PR via Workflow do Dynatrace chamando API do provider
+- [ ] Proxy GitHub → Dynatrace como function do próprio app
 - [ ] Charts de tendência (TimeseriesChart) na Overview
-- [ ] Detecção de uso de IA por commit (heurística co-author trailers)
-- [ ] Métricas reais de serviço no Release Comparison (puxar do Grail por `dt.entity.service`)
-- [ ] App function pra ingerir dados de GitHub/GitLab quando o pipeline não tem plugin SDLC
-
-## Licença
-
-Privado — projeto interno.
+- [ ] Aprovação real de PR via Workflow do Dynatrace + API do provider
+- [ ] Métricas reais de serviço no Release Comparison (puxar `dt.entity.service` do Grail)

@@ -5,9 +5,7 @@ import { Header } from "./components/Header";
 import { FilterBar } from "./components/FilterBar";
 import { Overview } from "./pages/Overview";
 import { Developers } from "./pages/Developers";
-import { Repositories } from "./pages/Repositories";
 import { PullRequests } from "./pages/PullRequests";
-import { Builds } from "./pages/Builds";
 import { ReleaseComparison } from "./pages/ReleaseComparison";
 import { FilterProvider } from "./state/FilterContext";
 import { TimeRangeProvider } from "./state/TimeRangeContext";
@@ -26,11 +24,9 @@ export const App = () => {
             <FilterBar />
             <Routes>
               <Route path="/" element={<Overview />} />
+              <Route path="/pull-requests" element={<PullRequests />} />
               <Route path="/releases" element={<ReleaseComparison />} />
               <Route path="/developers" element={<Developers />} />
-              <Route path="/repositories" element={<Repositories />} />
-              <Route path="/pull-requests" element={<PullRequests />} />
-              <Route path="/builds" element={<Builds />} />
             </Routes>
           </Page.Main>
         </Page>
