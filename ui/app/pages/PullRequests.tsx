@@ -31,28 +31,10 @@ export const PullRequests: React.FC = () => {
   const columns = useMemo<DataTableColumnDef<PullRequest>[]>(
     () => [
       {
-        id: "number",
-        header: "PR / MR",
-        accessor: "number",
-        width: 110,
-        alignment: "center",
-        cell: ({ rowData }) => {
-          const href = rowData.url || repoUrl(rowData.repository);
-          const label = rowData.number > 0 ? `#${rowData.number}` : "abrir →";
-          return <ExternalLink href={href}>{label}</ExternalLink>;
-        },
-      },
-      {
-        id: "title",
-        header: "Título",
-        accessor: (r) => r.title || "—",
-        width: "1fr",
-      },
-      {
         id: "repo",
         header: "Repositório",
         accessor: "repository",
-        width: 320,
+        width: "1fr",
         cell: ({ rowData }) => (
           <ExternalLink href={repoUrl(rowData.repository)}>{rowData.repository}</ExternalLink>
         ),
@@ -61,15 +43,15 @@ export const PullRequests: React.FC = () => {
         id: "author",
         header: "Autor",
         accessor: (r) => r.author || "—",
-        width: 180,
+        width: 200,
       },
       {
         id: "provider",
         header: "Provider",
         accessor: (r) => providerLabel(r.provider),
-        width: 120,
+        width: 140,
       },
-      { id: "createdAt", header: "Criado em", accessor: "createdAt", width: 220 },
+      { id: "createdAt", header: "Criado em", accessor: "createdAt", width: 240 },
     ],
     [],
   );

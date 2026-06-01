@@ -100,18 +100,15 @@ function mapRecord(r: Record<string, unknown>, i: number): PullRequest {
   };
 }
 
-// Cada PR gera vários eventos (started/finished/etc). Agrupamos pelo melhor
-// identificador disponível: número real do PR, senão id interno, senão o
-// próprio repositório (assume 1 PR aberto por repo quando não há número).
+// Cada PR gera vários eventos (opened/synchronize/finished/etc) e o payload
+// nem sempre traz pull_request.number. Quando há número, agrupamos por
+// repo#número (separa PRs distintos). Quando NÃO há número confiável,
+// agrupamos por repositório — assume 1 PR aberto por repo no MVP. Nunca
+// usamos event.id como chave (é único por evento e quebraria o dedup).
 function dedupLatestPerPR(prs: PullRequest[]): PullRequest[] {
   const map = new Map<string, PullRequest>();
   for (const pr of prs) {
-    const key =
-      pr.number > 0
-        ? `${pr.repository}#${pr.number}`
-        : pr.id && !pr.id.startsWith("pr-")
-          ? `${pr.repository}@${pr.id}`
-          : pr.repository;
+    const key = pr.number > 0 ? `${pr.repository}#${pr.number}` : pr.repository;
     const existing = map.get(key);
     if (!existing || new Date(pr.updatedAt).getTime() >= new Date(existing.updatedAt).getTime()) {
       map.set(key, pr);
