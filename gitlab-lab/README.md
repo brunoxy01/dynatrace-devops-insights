@@ -2,7 +2,7 @@
 
 Réplica do cenário de validação (que já funcionou no GitHub) agora pro **GitLab**.
 
-Repo de teste: https://gitlab.com/dynatrace3835911/dynatrace-merge-resquest-event
+Repo de teste: https://gitlab.com/brunoxy01/dynatrace-mr-lab
 
 ## Conteúdo
 
@@ -17,8 +17,8 @@ No GitHub, o evento do PR só chegava quando o **workflow rodava** (o webhook pe
 ### 1. Subir o pipeline pro repo GitLab
 
 ```bash
-git clone https://gitlab.com/dynatrace3835911/dynatrace-merge-resquest-event.git
-cd dynatrace-merge-resquest-event
+git clone https://gitlab.com/brunoxy01/dynatrace-mr-lab.git
+cd dynatrace-mr-lab
 # copie o .gitlab-ci.yml deste diretório pra cá
 cp /caminho/para/gitlab-lab/.gitlab-ci.yml .
 git add .gitlab-ci.yml
@@ -49,7 +49,7 @@ git push -u origin feat/gitlab-test
 fetch events
 | filter event.kind == "SDLC_EVENT"
 | filter event.type == "merge_request" or event.type == "pull_request"
-| filter contains(project, "dynatrace-merge-resquest-event")
+| filter contains(project, "dynatrace-mr-lab")
 | sort timestamp desc
 | limit 20
 ```

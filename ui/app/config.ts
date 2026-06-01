@@ -4,7 +4,7 @@
 // de outras orgs e não deve poluir a UI.
 export const REPO_WATCHLIST = [
   "brunoxy01/dynatrace-devops-insights",
-  "dynatrace3835911/dynatrace-merge-resquest-event",
+  "brunoxy01/dynatrace-mr-lab",
 ];
 
 // Match client-side. O DQL não consegue filtrar por `repository.full_name`
