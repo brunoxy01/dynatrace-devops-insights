@@ -2,7 +2,14 @@ import { useMemo } from "react";
 import { useDql } from "@dynatrace-sdk/react-hooks";
 import { useTimeRange } from "../state/TimeRangeContext";
 import { matchesWatchlist } from "../config";
-import { resolveString } from "../data/eventFields";
+import {
+  authorName,
+  branchName,
+  isPrEvent,
+  prDedupKey,
+  prNumber,
+  repoFullName,
+} from "../data/sdlcFields";
 
 export interface Contributor {
   name: string;
@@ -24,44 +31,6 @@ export interface ActivitySnapshot {
 
 const FALLBACK_QUERY = "fetch dt.entity.host | limit 0";
 
-function repoOf(r: Record<string, unknown>): string {
-  return resolveString(r, [
-    "repository.full_name",
-    "pull_request.base.repo.full_name",
-    "project.path_with_namespace",
-  ]);
-}
-
-function authorOf(r: Record<string, unknown>): string {
-  return resolveString(r, [
-    "pull_request.user.login",
-    "sender.login",
-    "head_commit.author.username",
-    "head_commit.author.name",
-    "pusher.name",
-    "user.login",
-    "user.username",
-  ]);
-}
-
-function branchOf(r: Record<string, unknown>): string {
-  return resolveString(r, [
-    "pull_request.head.ref",
-    "workflow_run.head_branch",
-    "head_branch",
-    "object_attributes.source_branch",
-  ]);
-}
-
-function prKeyOf(r: Record<string, unknown>): string {
-  const repo = repoOf(r);
-  const number = resolveString(r, ["pull_request.number", "object_attributes.iid"]);
-  if (number) return `${repo}#${number}`;
-  const branch = branchOf(r);
-  if (branch) return `${repo}@${branch}`;
-  return ""; // sem identificador de PR → ignora (evento workflow sem contexto)
-}
-
 function buildQuery(fromIso: string, toIso: string): string {
   return `fetch events, from: "${fromIso}", to: "${toIso}"
 | filter event.kind == "SDLC_EVENT"
@@ -77,25 +46,22 @@ export function useSDLCActivity(): ActivitySnapshot {
 
   return useMemo(() => {
     const records = (data?.records ?? []) as Record<string, unknown>[];
-    const matched = records.filter((r) => matchesWatchlist(repoOf(r)));
+    const matched = records.filter((r) => matchesWatchlist(repoFullName(r)));
 
-    // PRs únicos: agrupa eventos pull_request por número (quando existe) ou
-    // pela branch de origem. Isso separa múltiplos PRs no mesmo repositório.
     const prByKey = new Map<string, { author: string; ts: string }>();
     const lastSeen = new Map<string, string>();
 
     for (const r of matched) {
-      const type = String(r["event.type"] ?? "");
       const ts = String(r["timestamp"] ?? "");
-      const author = authorOf(r);
+      const author = authorName(r);
 
       if (author) {
         const prev = lastSeen.get(author);
         if (!prev || (ts && ts > prev)) lastSeen.set(author, ts);
       }
 
-      if (type === "pull_request" || type === "merge_request") {
-        const key = prKeyOf(r);
+      if (isPrEvent(r)) {
+        const key = prDedupKey(repoFullName(r), prNumber(r), branchName(r));
         if (key) {
           const existing = prByKey.get(key);
           if (!existing || ts > existing.ts) prByKey.set(key, { author, ts });

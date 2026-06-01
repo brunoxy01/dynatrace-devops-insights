@@ -1,15 +1,13 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { Flex, Surface } from "@dynatrace/strato-components/layouts";
 import { Heading, Paragraph, Text, ExternalLink } from "@dynatrace/strato-components/typography";
 import { DataTable } from "@dynatrace/strato-components/tables";
 import type { DataTableColumnDef } from "@dynatrace/strato-components/tables";
 import { Chip } from "@dynatrace/strato-components/content";
-import { Button } from "@dynatrace/strato-components/buttons";
 import type { PullRequest } from "../data/types";
 import { PROVIDERS } from "../data/types";
 import { useFilters } from "../state/FilterContext";
 import { useSDLCPullRequests } from "../hooks/useSDLCPullRequests";
-import { useSDLCDebug } from "../hooks/useSDLCDebug";
 import { useTimeRange } from "../state/TimeRangeContext";
 import { repoUrl } from "../config";
 
@@ -20,8 +18,6 @@ export const PullRequests: React.FC = () => {
   const { applied } = useFilters();
   const { range } = useTimeRange();
   const { data: prsData, isLoading, matchedCount } = useSDLCPullRequests();
-  const debug = useSDLCDebug("dynatrace-mr-lab");
-  const [showDebug, setShowDebug] = useState(true);
 
   const rows = useMemo(() => {
     return prsData.filter((p) => {
@@ -81,55 +77,6 @@ export const PullRequests: React.FC = () => {
         </Flex>
         <Paragraph>{range.label} · dados dos SDLC events ingeridos via webhook</Paragraph>
       </Flex>
-
-      <Surface
-        padding={12}
-        elevation="raised"
-        style={{ borderLeft: "4px solid var(--dt-colors-border-accent-default)" }}
-      >
-        <Flex flexDirection="column" gap={8}>
-          <Flex alignItems="center" justifyContent="space-between">
-            <Text>
-              🔧 Debug temporário (GitLab) — {debug.total} SDLC events no período ·{" "}
-              {debug.matchCount} mencionam "dynatrace-mr-lab"
-            </Text>
-            <Button variant="default" onClick={() => setShowDebug((v) => !v)}>
-              {showDebug ? "Ocultar" : "Mostrar"}
-            </Button>
-          </Flex>
-          {showDebug && (
-            <>
-              <Text textStyle="small">
-                event.types no período:{" "}
-                {Object.entries(debug.byType)
-                  .map(([t, n]) => `${t} (${n})`)
-                  .join(" · ")}
-              </Text>
-              {debug.sample ? (
-                <pre
-                  style={{
-                    margin: 0,
-                    padding: 12,
-                    background: "var(--dt-colors-background-surface-primary-default)",
-                    fontSize: 12,
-                    overflow: "auto",
-                    maxHeight: 460,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-all",
-                  }}
-                >
-                  {JSON.stringify(debug.sample, null, 2)}
-                </pre>
-              ) : (
-                <Text textStyle="small">
-                  Nenhum evento contém "dynatrace-mr-lab" no período — o webhook do GitLab pode não
-                  ter ingerido, ou o repo vem com outro nome. Aumente o time range.
-                </Text>
-              )}
-            </>
-          )}
-        </Flex>
-      </Surface>
 
       {matchedCount > 0 ? (
         <DataTable data={rows} columns={columns} sortable resizable fullWidth />
