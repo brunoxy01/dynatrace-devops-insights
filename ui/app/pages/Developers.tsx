@@ -31,7 +31,6 @@ export const Developers: React.FC = () => {
     () => [
       { id: "name", header: "Contribuidor", accessor: "name", width: "1fr" },
       { id: "prsOpen", header: "PRs abertos", accessor: "prsOpen", width: 150 },
-      { id: "commits", header: "Commits", accessor: "commits", width: 150 },
       {
         id: "lastActivity",
         header: "Última atividade",

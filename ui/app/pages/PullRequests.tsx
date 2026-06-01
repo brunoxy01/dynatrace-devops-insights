@@ -41,6 +41,12 @@ export const PullRequests: React.FC = () => {
         ),
       },
       {
+        id: "branch",
+        header: "Branch",
+        accessor: (r) => r.branch || "—",
+        width: 220,
+      },
+      {
         id: "author",
         header: "Autor",
         accessor: (r) => r.author || "—",

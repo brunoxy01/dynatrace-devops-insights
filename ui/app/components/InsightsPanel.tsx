@@ -14,10 +14,9 @@ interface Insight {
 interface Props {
   contributors: Contributor[];
   prs: PullRequest[];
-  commits: number;
 }
 
-function buildInsights({ contributors, prs, commits }: Props): Insight[] {
+function buildInsights({ contributors, prs }: Props): Insight[] {
   const out: Insight[] = [];
   const openPrs = prs.filter((p) => p.state === "open");
 
@@ -34,6 +33,18 @@ function buildInsights({ contributors, prs, commits }: Props): Insight[] {
     });
   }
 
+  // Volume de PRs abertos
+  if (openPrs.length > 0) {
+    out.push({
+      severity: openPrs.length >= 5 ? "warning" : "info",
+      title: `${openPrs.length} PR(s) aberto(s) no período`,
+      detail:
+        openPrs.length >= 5
+          ? "Fila de revisão crescendo — avalie priorizar merges."
+          : "Fluxo de revisão dentro do normal.",
+    });
+  }
+
   // Bus factor
   if (contributors.length === 1) {
     out.push({
@@ -43,28 +54,15 @@ function buildInsights({ contributors, prs, commits }: Props): Insight[] {
     });
   } else if (contributors.length > 1) {
     const top = contributors[0];
-    const totalActions = contributors.reduce((a, c) => a + c.prsOpen + c.commits, 0);
-    const topActions = top.prsOpen + top.commits;
-    const pct = Math.round((topActions / Math.max(totalActions, 1)) * 100);
+    const totalPrs = contributors.reduce((a, c) => a + c.prsOpen, 0);
+    const pct = Math.round((top.prsOpen / Math.max(totalPrs, 1)) * 100);
     if (pct >= 70) {
       out.push({
         severity: "warning",
         title: `Concentração de atividade em ${top.name} (${pct}%)`,
-        detail: "A maior parte das entregas está concentrada em um contribuidor. Avalie distribuir a carga.",
+        detail: "A maior parte dos PRs está concentrada em um contribuidor. Avalie distribuir a carga.",
       });
     }
-  }
-
-  // Ritmo de commits
-  if (commits > 0) {
-    out.push({
-      severity: "info",
-      title: `${commits} commit(s) no período`,
-      detail:
-        openPrs.length > 0
-          ? `${openPrs.length} PR(s) aberto(s) acompanhando o ritmo de commits.`
-          : "Commits chegando direto sem PR aberto no momento.",
-    });
   }
 
   if (out.length === 0) {
@@ -95,7 +93,7 @@ export const InsightsPanel: React.FC<Props> = (props) => {
           <Chip color="primary">{insights.length}</Chip>
         </Flex>
         <Text textStyle="small">
-          Análise automática dos seus SDLC events (commits, PRs, builds) ingeridos no Grail.
+          Análise automática dos seus SDLC events (PRs/MRs) ingeridos no Grail.
         </Text>
         <Flex flexDirection="column" gap={12}>
           {insights.map((i, idx) => (

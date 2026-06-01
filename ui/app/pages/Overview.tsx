@@ -30,11 +30,10 @@ export const Overview: React.FC = () => {
     const open = prs.filter((p) => p.state === "open").length;
     const top = activity.contributors[0];
     return {
-      commits: activity.totals.commits,
       contributors: activity.totals.distinctAuthors,
       openPrs: open,
       topContributor: top?.name ?? "—",
-      topContributorHint: top ? `${top.prsOpen} PRs · ${top.commits} commits` : undefined,
+      topContributorHint: top ? `${top.prsOpen} PR(s) aberto(s)` : undefined,
     };
   }, [activity, prs]);
 
@@ -66,7 +65,6 @@ export const Overview: React.FC = () => {
       ) : (
         <>
           <Flex gap={16} flexWrap="wrap">
-            <KpiCard label="Commits" value={stats.commits} />
             <KpiCard
               label="PRs abertos"
               value={stats.openPrs}
@@ -85,11 +83,7 @@ export const Overview: React.FC = () => {
             />
           </Flex>
 
-          <InsightsPanel
-            contributors={activity.contributors}
-            prs={prs}
-            commits={stats.commits}
-          />
+          <InsightsPanel contributors={activity.contributors} prs={prs} />
 
           <Surface padding={16} elevation="raised" className="dt-hover-card">
             <Flex flexDirection="column" gap={12}>
@@ -103,7 +97,7 @@ export const Overview: React.FC = () => {
                       {i + 1}. {c.name}
                     </Text>
                     <Text textStyle="small">
-                      {c.prsOpen} PRs · {c.commits} commits · {fmtRelative(c.lastActivity)}
+                      {c.prsOpen} PR(s) · {fmtRelative(c.lastActivity)}
                     </Text>
                   </Flex>
                 ))

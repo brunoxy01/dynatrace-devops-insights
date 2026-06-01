@@ -65,7 +65,13 @@ function mapRecord(r: Record<string, unknown>, i: number): PullRequest {
   );
   const branch = resolveString(
     r,
-    ["pull_request.head.ref", "object_attributes.source_branch", "head.ref"],
+    [
+      "pull_request.head.ref",
+      "workflow_run.head_branch",
+      "head_branch",
+      "object_attributes.source_branch",
+      "head.ref",
+    ],
     "",
   );
   const additions = resolveNumber(r, ["pull_request.additions"], 0);
@@ -100,15 +106,19 @@ function mapRecord(r: Record<string, unknown>, i: number): PullRequest {
   };
 }
 
-// Cada PR gera vários eventos (opened/synchronize/finished/etc) e o payload
-// nem sempre traz pull_request.number. Quando há número, agrupamos por
-// repo#número (separa PRs distintos). Quando NÃO há número confiável,
-// agrupamos por repositório — assume 1 PR aberto por repo no MVP. Nunca
-// usamos event.id como chave (é único por evento e quebraria o dedup).
+// Cada PR gera vários eventos (opened/synchronize/finished/etc). Agrupamos
+// pelo melhor identificador disponível: número do PR, senão a branch de
+// origem (separa múltiplos PRs no mesmo repo), senão o repositório. Nunca
+// usamos event.id (é único por evento e quebraria o dedup).
 function dedupLatestPerPR(prs: PullRequest[]): PullRequest[] {
   const map = new Map<string, PullRequest>();
   for (const pr of prs) {
-    const key = pr.number > 0 ? `${pr.repository}#${pr.number}` : pr.repository;
+    const key =
+      pr.number > 0
+        ? `${pr.repository}#${pr.number}`
+        : pr.branch
+          ? `${pr.repository}@${pr.branch}`
+          : pr.repository;
     const existing = map.get(key);
     if (!existing || new Date(pr.updatedAt).getTime() >= new Date(existing.updatedAt).getTime()) {
       map.set(key, pr);

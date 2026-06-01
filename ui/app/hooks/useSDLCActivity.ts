@@ -2,19 +2,17 @@ import { useMemo } from "react";
 import { useDql } from "@dynatrace-sdk/react-hooks";
 import { useTimeRange } from "../state/TimeRangeContext";
 import { matchesWatchlist } from "../config";
-import { resolveString, resolveField } from "../data/eventFields";
+import { resolveString } from "../data/eventFields";
 
 export interface Contributor {
   name: string;
   prsOpen: number;
-  commits: number;
   lastActivity: string;
 }
 
 export interface ActivitySnapshot {
   contributors: Contributor[];
   totals: {
-    commits: number;
     openPrs: number;
     distinctAuthors: number;
   };
@@ -46,6 +44,24 @@ function authorOf(r: Record<string, unknown>): string {
   ]);
 }
 
+function branchOf(r: Record<string, unknown>): string {
+  return resolveString(r, [
+    "pull_request.head.ref",
+    "workflow_run.head_branch",
+    "head_branch",
+    "object_attributes.source_branch",
+  ]);
+}
+
+function prKeyOf(r: Record<string, unknown>): string {
+  const repo = repoOf(r);
+  const number = resolveString(r, ["pull_request.number", "object_attributes.iid"]);
+  if (number) return `${repo}#${number}`;
+  const branch = branchOf(r);
+  if (branch) return `${repo}@${branch}`;
+  return repo;
+}
+
 function buildQuery(fromIso: string, toIso: string): string {
   return `fetch events, from: "${fromIso}", to: "${toIso}"
 | filter event.kind == "SDLC_EVENT"
@@ -63,92 +79,47 @@ export function useSDLCActivity(): ActivitySnapshot {
     const records = (data?.records ?? []) as Record<string, unknown>[];
     const matched = records.filter((r) => matchesWatchlist(repoOf(r)));
 
-    // --- PRs únicos: agrupa eventos pull_request por repositório (sem número
-    // confiável, assumimos 1 PR aberto por repo). Pega o autor do evento mais
-    // recente de cada grupo. NÃO conta started/finished como PRs separados. ---
-    const prByRepo = new Map<string, { author: string; ts: string }>();
-
-    // --- Commits: SHAs únicos coletados dos arrays `commits` dos pushes.
-    // Atribui cada commit ao seu próprio autor. ---
-    const commitShas = new Set<string>();
-    const commitsByAuthor = new Map<string, Set<string>>();
-
+    // PRs únicos: agrupa eventos pull_request por número (quando existe) ou
+    // pela branch de origem. Isso separa múltiplos PRs no mesmo repositório.
+    const prByKey = new Map<string, { author: string; ts: string }>();
     const lastSeen = new Map<string, string>();
-
-    const touchAuthor = (name: string, ts: string): void => {
-      if (!name) return;
-      const prev = lastSeen.get(name);
-      if (!prev || (ts && ts > prev)) lastSeen.set(name, ts);
-    };
 
     for (const r of matched) {
       const type = String(r["event.type"] ?? "");
       const ts = String(r["timestamp"] ?? "");
-      const evAuthor = authorOf(r);
-      touchAuthor(evAuthor, ts);
+      const author = authorOf(r);
 
-      if (type === "pull_request") {
-        const repo = repoOf(r);
-        const existing = prByRepo.get(repo);
-        if (!existing || ts > existing.ts) prByRepo.set(repo, { author: evAuthor, ts });
+      if (author) {
+        const prev = lastSeen.get(author);
+        if (!prev || (ts && ts > prev)) lastSeen.set(author, ts);
       }
 
-      if (type === "push") {
-        const addCommit = (sha: string, author: string): void => {
-          if (!sha || commitShas.has(sha)) return;
-          commitShas.add(sha);
-          if (author) {
-            const set = commitsByAuthor.get(author) ?? new Set<string>();
-            set.add(sha);
-            commitsByAuthor.set(author, set);
-          }
-        };
-        const commits = resolveField(r, "commits");
-        if (Array.isArray(commits) && commits.length > 0) {
-          for (const c of commits) {
-            const co = c as Record<string, unknown> | null;
-            const sha = co ? String(co.id ?? co.sha ?? "") : "";
-            const ca =
-              (co &&
-                (resolveString(co, ["author.username", "author.name"]) ||
-                  String(co.author ?? ""))) ||
-              evAuthor;
-            addCommit(sha, ca);
-          }
-        } else {
-          // Push sem array `commits` serializado: conta ao menos o head commit
-          const sha = resolveString(r, ["head_commit.id", "after", "checkout_sha"]);
-          addCommit(sha, evAuthor);
-        }
+      if (type === "pull_request") {
+        const key = prKeyOf(r);
+        const existing = prByKey.get(key);
+        if (!existing || ts > existing.ts) prByKey.set(key, { author, ts });
       }
     }
 
-    // PRs abertos por autor
     const prsOpenByAuthor = new Map<string, number>();
-    for (const { author } of prByRepo.values()) {
+    for (const { author } of prByKey.values()) {
       if (!author) continue;
       prsOpenByAuthor.set(author, (prsOpenByAuthor.get(author) ?? 0) + 1);
     }
 
-    const names = new Set<string>([
-      ...prsOpenByAuthor.keys(),
-      ...commitsByAuthor.keys(),
-    ]);
-
+    const names = new Set<string>([...prsOpenByAuthor.keys(), ...lastSeen.keys()]);
     const contributors: Contributor[] = Array.from(names)
       .map((name) => ({
         name,
         prsOpen: prsOpenByAuthor.get(name) ?? 0,
-        commits: commitsByAuthor.get(name)?.size ?? 0,
         lastActivity: lastSeen.get(name) ?? "",
       }))
-      .sort((a, b) => b.commits + b.prsOpen - (a.commits + a.prsOpen));
+      .sort((a, b) => b.prsOpen - a.prsOpen);
 
     return {
       contributors,
       totals: {
-        commits: commitShas.size,
-        openPrs: prByRepo.size,
+        openPrs: prByKey.size,
         distinctAuthors: contributors.length,
       },
       isLoading,
