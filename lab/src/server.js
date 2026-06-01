@@ -11,7 +11,7 @@ function createApp() {
     res.json({
       service: SERVICE_NAME,
       version: RELEASE_VERSION,
-      message: "Hello from the DevOps Insights lab",
+      message: "Hello from the DevOps Insights lab — webhook test PR",
     });
   });
 
