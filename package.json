@@ -1,6 +1,6 @@
 {
   "name": "devops-insights",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "DevOps Insights: commits, PRs, builds, deploys e branch strategy por desenvolvedor",
   "scripts": {
     "build": "dt-app build",

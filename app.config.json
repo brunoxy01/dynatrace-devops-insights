@@ -3,7 +3,7 @@
   "environmentUrl": "https://bwm98081.apps.dynatrace.com/",
   "app": {
     "name": "DevOps Insights",
-    "version": "0.7.0",
+    "version": "0.8.0",
     "description": "Métricas DevOps: commits, PRs, builds, deploys e branch strategy",
     "id": "my.devops.insights",
     "scopes": [

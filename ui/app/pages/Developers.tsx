@@ -20,12 +20,11 @@ const fmtTimestamp = (iso: string): string => {
 export const Developers: React.FC = () => {
   const { applied } = useFilters();
   const { range } = useTimeRange();
-  const { contributors, isLoading, rawCount } = useSDLCActivity();
+  const { contributors, isLoading, matchedCount } = useSDLCActivity();
 
   const rows = useMemo(() => {
-    const authorFilter = applied.author;
-    if (!authorFilter || authorFilter.length === 0) return contributors;
-    return contributors.filter((c) => authorFilter.includes(c.name));
+    if (!applied.author?.length) return contributors;
+    return contributors.filter((c) => applied.author!.includes(c.name));
   }, [contributors, applied.author]);
 
   const columns = useMemo<DataTableColumnDef<Contributor>[]>(
@@ -33,7 +32,7 @@ export const Developers: React.FC = () => {
       { id: "name", header: "Desenvolvedor", accessor: "name", width: "1fr" },
       { id: "prsOpened", header: "PRs abertos", accessor: "prsOpened", width: 140 },
       { id: "prsMerged", header: "PRs concluídos", accessor: "prsMerged", width: 160 },
-      { id: "commits", header: "Pushes", accessor: "commits", width: 130 },
+      { id: "commits", header: "Commits / pushes", accessor: "commits", width: 170 },
       { id: "builds", header: "Builds", accessor: "builds", width: 120 },
       {
         id: "lastActivity",
@@ -51,25 +50,25 @@ export const Developers: React.FC = () => {
         <Flex alignItems="center" gap={12}>
           <Heading level={2}>Desenvolvedores</Heading>
           <Chip color={rows.length > 0 ? "success" : "neutral"}>
-            {rows.length > 0
-              ? `${rows.length} contribuidor${rows.length === 1 ? "" : "es"} · ${rawCount} eventos`
-              : "sem dados"}
+            {rows.length > 0 ? `${rows.length} contribuidor(es)` : "sem dados"}
           </Chip>
           {isLoading && <Text>carregando…</Text>}
         </Flex>
-        <Paragraph>
-          Contribuidores derivados dos SDLC events ingeridos no Grail · {range.label}
-        </Paragraph>
+        <Paragraph>Contribuidores derivados dos SDLC events · {range.label}</Paragraph>
       </Flex>
 
       {rows.length === 0 && !isLoading ? (
         <Surface padding={24} elevation="raised">
           <Flex flexDirection="column" gap={8} alignItems="flex-start">
-            <Heading level={4}>Ainda não temos contribuidores</Heading>
+            <Heading level={4}>
+              {matchedCount > 0
+                ? "Eventos sem autor identificado"
+                : "Sem eventos no período"}
+            </Heading>
             <Paragraph>
-              Os contribuidores aparecem aqui quando houver eventos `pull_request`, `push` ou
-              `build` no Grail com autor identificado. Abra um PR ou faça um push pro repo
-              conectado pra começar a popular.
+              {matchedCount > 0
+                ? "Há eventos no Grail mas nenhum trouxe o autor. Pode ser evento de sistema (workflow run) sem usuário associado."
+                : "Abra um PR ou faça um push pro repositório conectado pra começar a popular."}
             </Paragraph>
           </Flex>
         </Surface>
