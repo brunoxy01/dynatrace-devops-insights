@@ -1,17 +1,16 @@
-import React, { useMemo } from "react";
-import { Flex } from "@dynatrace/strato-components/layouts";
+import React, { useMemo, useState } from "react";
+import { Flex, Surface } from "@dynatrace/strato-components/layouts";
 import { Heading, Paragraph, Text } from "@dynatrace/strato-components/typography";
 import { DataTable } from "@dynatrace/strato-components/tables";
 import type { DataTableColumnDef } from "@dynatrace/strato-components/tables";
 import { Button } from "@dynatrace/strato-components/buttons";
 import { Chip } from "@dynatrace/strato-components/content";
 import { showToast } from "@dynatrace/strato-components/notifications";
-import { repositories } from "../data/mockData";
-import { filterPullRequests, filterRepositories } from "../data/applyFilters";
+import { filterPullRequests } from "../data/applyFilters";
 import type { PullRequest } from "../data/types";
 import { PROVIDERS } from "../data/types";
 import { useFilters } from "../state/FilterContext";
-import { useSDLCPullRequests } from "../hooks/useSDLCPullRequests";
+import { useSDLCPullRequests, REPO_WATCHLIST } from "../hooks/useSDLCPullRequests";
 import { useTimeRange } from "../state/TimeRangeContext";
 
 const providerLabel = (id: PullRequest["provider"]): string =>
@@ -31,11 +30,14 @@ function triggerApproveWorkflow(pr: PullRequest): void {
 export const PullRequests: React.FC = () => {
   const { applied } = useFilters();
   const { range } = useTimeRange();
-  const { data: prsData, source, isLoading } = useSDLCPullRequests();
+  const { data: prsData, source, isLoading, rawSample, rawCount } = useSDLCPullRequests();
+  const [showRaw, setShowRaw] = useState(false);
 
   const rows = useMemo(() => {
-    const repoSet = new Set(filterRepositories(repositories, applied).map((r) => r.fullName));
-    return filterPullRequests(prsData, applied, repoSet).filter((p) => p.state === "open");
+    // Quando vem do Grail os PRs já vêm filtrados pelo repo na query.
+    // Aqui só aplicamos os filtros que o usuário digitou no FilterField.
+    const allRepoSet = new Set(prsData.map((p) => p.repository));
+    return filterPullRequests(prsData, applied, allRepoSet).filter((p) => p.state === "open");
   }, [applied, prsData]);
 
   const columns = useMemo<DataTableColumnDef<PullRequest>[]>(
@@ -47,7 +49,7 @@ export const PullRequests: React.FC = () => {
         width: 100,
       },
       { id: "title", header: "Título", accessor: "title", width: "1fr" },
-      { id: "repo", header: "Repositório", accessor: "repository", width: 240 },
+      { id: "repo", header: "Repositório", accessor: "repository", width: 280 },
       {
         id: "provider",
         header: "Provider",
@@ -83,18 +85,46 @@ export const PullRequests: React.FC = () => {
         <Flex alignItems="center" gap={12}>
           <Heading level={2}>Pull / Merge Requests abertos</Heading>
           <Chip color={source === "grail" ? "success" : "neutral"}>
-            {source === "grail" ? "SDLC events (Grail)" : "mock"}
+            {source === "grail" ? `SDLC events (Grail) · ${rawCount} eventos` : "mock"}
           </Chip>
           {isLoading && <Text>carregando…</Text>}
         </Flex>
         <Paragraph>
           {source === "grail"
-            ? `${rows.length} PRs/MRs abertos vindos dos webhooks do GitHub/GitLab/Azure DevOps · ${range.label}`
-            : "Sem ingestão SDLC detectada — mostrando mock data. Configure webhooks pra ver dados reais (ver README)."}{" "}
+            ? `${rows.length} PR(s) abertos vindos do webhook · ${range.label} · repos: ${REPO_WATCHLIST.join(", ")}`
+            : "Sem eventos pull_request detectados no Grail — mostrando mock. Configure webhook do GitHub com 'Pull requests' habilitado (ver README)."}{" "}
           Botão <strong>Aprovar</strong> dispara um Workflow do Dynatrace que chama a API do provider.
         </Paragraph>
       </Flex>
+
       <DataTable data={rows} columns={columns} sortable resizable fullWidth />
+
+      {source === "grail" && rawSample && (
+        <Surface padding={12} elevation="raised">
+          <Flex flexDirection="column" gap={8}>
+            <Flex alignItems="center" justifyContent="space-between">
+              <Text>Debug: campos do primeiro evento do Grail</Text>
+              <Button variant="default" onClick={() => setShowRaw((v) => !v)}>
+                {showRaw ? "Ocultar" : "Mostrar"}
+              </Button>
+            </Flex>
+            {showRaw && (
+              <pre
+                style={{
+                  margin: 0,
+                  padding: 12,
+                  background: "var(--dt-colors-background-surface-primary-default)",
+                  fontSize: 12,
+                  overflow: "auto",
+                  maxHeight: 320,
+                }}
+              >
+                {JSON.stringify(rawSample, null, 2)}
+              </pre>
+            )}
+          </Flex>
+        </Surface>
+      )}
     </Flex>
   );
 };

@@ -105,12 +105,6 @@ export const Overview: React.FC = () => {
           value={stats.openPrs}
           onClick={() => navigate("/pull-requests")}
         />
-        <KpiCard
-          label="Deploys"
-          value={stats.deploysCount}
-          hint={`~${stats.deployFrequency}/dia prod`}
-          onClick={() => navigate("/releases")}
-        />
         <KpiCard label="Lead time PR" value={`${stats.avgLeadTime}h`} hint="média devs" />
         <KpiCard
           label="Top contribuidor"
