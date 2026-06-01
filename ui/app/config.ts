@@ -3,9 +3,13 @@
 // de outras tenants/orgs e não deve poluir a UI.
 export const REPO_WATCHLIST = ["brunoxy01/dynatrace-devops-insights"];
 
-// String pronta pra plugar no filtro DQL: `(name == "a" or name == "b")`
-export function repoFilterDql(field = "repository.full_name"): string {
-  return REPO_WATCHLIST.map((r) => `${field} == "${r}"`).join(" or ");
+// Match client-side. O DQL não consegue filtrar por `repository.full_name`
+// porque a chave vem com ponto literal no nome (não é nested access),
+// então filtramos depois do mapping no JS.
+export function matchesWatchlist(repoFullName: string | undefined): boolean {
+  if (!repoFullName) return false;
+  if (REPO_WATCHLIST.length === 0) return true;
+  return REPO_WATCHLIST.includes(repoFullName);
 }
 
 // URL clicável a partir do full name. Por enquanto assumindo GitHub.

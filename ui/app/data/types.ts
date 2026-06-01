@@ -13,6 +13,8 @@ export interface PullRequest {
   repository: string;
   provider: Provider;
   author: string;
+  branch: string;
+  url: string;
   state: "open" | "merged" | "closed";
   createdAt: string;
   updatedAt: string;

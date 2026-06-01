@@ -2,13 +2,14 @@ import { useMemo } from "react";
 import { useDql } from "@dynatrace-sdk/react-hooks";
 import type { Provider, PullRequest } from "../data/types";
 import { useTimeRange } from "../state/TimeRangeContext";
-import { repoFilterDql } from "../config";
+import { matchesWatchlist } from "../config";
 
 interface UseSDLCPullRequestsResult {
   data: PullRequest[];
   isLoading: boolean;
   error?: Error;
   rawCount: number;
+  matchedCount: number;
   rawSample?: Record<string, unknown>;
   dqlQuery: string;
 }
@@ -31,13 +32,7 @@ function pick(record: Record<string, unknown>, keys: string[], fallback = ""): s
 function inferState(record: Record<string, unknown>): PullRequest["state"] {
   const outcome = pick(
     record,
-    [
-      "pull_request.state",
-      "payload.pull_request.state",
-      "event.outcome",
-      "change.state",
-      "state",
-    ],
+    ["pull_request.state", "payload.pull_request.state", "event.outcome", "change.state", "state"],
     "",
   ).toLowerCase();
   if (outcome === "merged") return "merged";
@@ -95,27 +90,29 @@ function mapDqlRecordToPr(r: Record<string, unknown>, i: number): PullRequest {
     ],
     "unknown",
   );
+  const branch = pick(
+    r,
+    [
+      "pull_request.head.ref",
+      "payload.pull_request.head.ref",
+      "vcs.repository.ref.name",
+      "head_branch",
+      "branch",
+      "ref",
+    ],
+    "—",
+  );
   const additions = Number(
     pick(
       r,
-      [
-        "pull_request.additions",
-        "payload.pull_request.additions",
-        "vcs.repository.change.additions",
-        "additions",
-      ],
+      ["pull_request.additions", "payload.pull_request.additions", "additions"],
       "0",
     ),
   );
   const deletions = Number(
     pick(
       r,
-      [
-        "pull_request.deletions",
-        "payload.pull_request.deletions",
-        "vcs.repository.change.deletions",
-        "deletions",
-      ],
+      ["pull_request.deletions", "payload.pull_request.deletions", "deletions"],
       "0",
     ),
   );
@@ -141,6 +138,8 @@ function mapDqlRecordToPr(r: Record<string, unknown>, i: number): PullRequest {
     repository: repoFull || "unknown",
     provider: providerFromUrl(url),
     author,
+    branch,
+    url,
     state: inferState(r),
     createdAt,
     updatedAt,
@@ -149,9 +148,6 @@ function mapDqlRecordToPr(r: Record<string, unknown>, i: number): PullRequest {
   };
 }
 
-// Dedup considerando tanto pull_request.number quanto fallback por timestamp
-// próximo. Se não conseguimos extrair o number, agrupamos por repositório
-// (1 PR aberto por repo na watchlist no MVP).
 function dedupLatestPerPR(prs: PullRequest[]): PullRequest[] {
   const map = new Map<string, PullRequest>();
   const hasRealNumbers = prs.some(
@@ -172,12 +168,14 @@ function dedupLatestPerPR(prs: PullRequest[]): PullRequest[] {
 const FALLBACK_QUERY = "fetch dt.entity.host | limit 0";
 
 function buildQuery(fromIso: string, toIso: string): string {
+  // Sem filtro de repo no DQL: a key `repository.full_name` no payload
+  // tem ponto literal no nome e DQL trata como nested access (= 0 records).
+  // Filtramos no JS depois do mapping.
   return `fetch events, from: "${fromIso}", to: "${toIso}"
 | filter event.kind == "SDLC_EVENT"
 | filter event.type == "pull_request"
-| filter ${repoFilterDql()}
 | sort timestamp desc
-| limit 200`;
+| limit 500`;
 }
 
 export function useSDLCPullRequests(): UseSDLCPullRequestsResult {
@@ -188,20 +186,24 @@ export function useSDLCPullRequests(): UseSDLCPullRequestsResult {
 
   return useMemo(() => {
     const records = (data?.records ?? []) as Record<string, unknown>[];
-    if (!isValidRange || error || records.length === 0) {
+    if (!isValidRange || error) {
       return {
         data: [],
         isLoading,
         error: error as Error | undefined,
         rawCount: 0,
+        matchedCount: 0,
         dqlQuery: query,
       };
     }
-    const prs = dedupLatestPerPR(records.map((r, i) => mapDqlRecordToPr(r, i)));
+    const allMapped = records.map((r, i) => mapDqlRecordToPr(r, i));
+    const matched = allMapped.filter((p) => matchesWatchlist(p.repository));
+    const prs = dedupLatestPerPR(matched);
     return {
       data: prs,
       isLoading,
       rawCount: records.length,
+      matchedCount: matched.length,
       rawSample: records[0],
       dqlQuery: query,
     };

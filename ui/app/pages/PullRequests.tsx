@@ -18,7 +18,8 @@ const providerLabel = (id: PullRequest["provider"]): string =>
 export const PullRequests: React.FC = () => {
   const { applied } = useFilters();
   const { range } = useTimeRange();
-  const { data: prsData, isLoading, rawSample, rawCount, dqlQuery } = useSDLCPullRequests();
+  const { data: prsData, isLoading, rawSample, rawCount, matchedCount, dqlQuery } =
+    useSDLCPullRequests();
   const [showRaw, setShowRaw] = useState(true);
   const [showDql, setShowDql] = useState(false);
 
@@ -28,15 +29,9 @@ export const PullRequests: React.FC = () => {
       if (applied.author && applied.author.length > 0 && !applied.author.includes(p.author))
         return false;
       if (
-        applied.repository &&
-        applied.repository.length > 0 &&
-        !applied.repository.includes(p.repository)
-      )
-        return false;
-      if (
-        applied.provider &&
-        applied.provider.length > 0 &&
-        !applied.provider.includes(p.provider)
+        applied.branch &&
+        applied.branch.length > 0 &&
+        !applied.branch.includes(p.branch)
       )
         return false;
       return true;
@@ -48,8 +43,14 @@ export const PullRequests: React.FC = () => {
       {
         id: "number",
         header: "PR / MR",
-        accessor: (r) => `#${r.number}`,
+        accessor: "number",
         width: 100,
+        cell: ({ rowData }) =>
+          rowData.url ? (
+            <ExternalLink href={rowData.url}>#{rowData.number}</ExternalLink>
+          ) : (
+            <Text>#{rowData.number}</Text>
+          ),
       },
       { id: "title", header: "Título", accessor: "title", width: "1fr" },
       {
@@ -61,21 +62,22 @@ export const PullRequests: React.FC = () => {
           <ExternalLink href={repoUrl(rowData.repository)}>{rowData.repository}</ExternalLink>
         ),
       },
+      { id: "branch", header: "Branch", accessor: "branch", width: 200 },
+      { id: "author", header: "Autor", accessor: "author", width: 160 },
       {
         id: "provider",
         header: "Provider",
         accessor: (r) => providerLabel(r.provider),
-        width: 140,
+        width: 120,
       },
-      { id: "author", header: "Autor", accessor: "author", width: 160 },
-      { id: "additions", header: "Linhas +", accessor: "additions", width: 110 },
-      { id: "deletions", header: "Linhas -", accessor: "deletions", width: 110 },
+      { id: "additions", header: "+", accessor: "additions", width: 90 },
+      { id: "deletions", header: "-", accessor: "deletions", width: 90 },
       { id: "createdAt", header: "Criado em", accessor: "createdAt", width: 220 },
     ],
     [],
   );
 
-  const hasData = rawCount > 0;
+  const hasData = matchedCount > 0;
 
   return (
     <Flex flexDirection="column" padding={24} gap={16}>
@@ -83,21 +85,76 @@ export const PullRequests: React.FC = () => {
         <Flex alignItems="center" gap={12}>
           <Heading level={2}>Pull / Merge Requests abertos</Heading>
           <Chip color={hasData ? "success" : "neutral"}>
-            {hasData ? `SDLC events (Grail) · ${rawCount} eventos` : "sem eventos"}
+            {hasData
+              ? `${rows.length} aberto(s) · ${matchedCount}/${rawCount} eventos na watchlist`
+              : "sem eventos"}
           </Chip>
           {isLoading && <Text>carregando…</Text>}
         </Flex>
         <Paragraph>
           {hasData
-            ? `${rows.length} PR(s) abertos · ${range.label} · filtrando pelos repos da watchlist`
+            ? `${range.label} · dados reais dos SDLC events ingeridos via webhook`
             : `Sem eventos pull_request no Grail para ${range.label}.`}
         </Paragraph>
       </Flex>
 
+      {rawSample && (
+        <Surface
+          padding={16}
+          elevation="raised"
+          style={{ borderLeft: "4px solid var(--dt-colors-border-accent-default)" }}
+        >
+          <Flex flexDirection="column" gap={8}>
+            <Flex alignItems="center" justifyContent="space-between">
+              <Flex flexDirection="column" gap={2}>
+                <Text>
+                  <strong>Debug — JSON do primeiro evento.</strong> Se "Autor" ou "Título"
+                  estiverem vazios, me copie tudo abaixo aqui no chat que eu corrijo o mapper.
+                </Text>
+              </Flex>
+              <Button variant="default" onClick={() => setShowRaw((v) => !v)}>
+                {showRaw ? "Ocultar" : "Mostrar"}
+              </Button>
+            </Flex>
+            {showRaw && (
+              <pre
+                style={{
+                  margin: 0,
+                  padding: 12,
+                  background: "var(--dt-colors-background-surface-primary-default)",
+                  fontSize: 12,
+                  overflow: "auto",
+                  maxHeight: 500,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-all",
+                }}
+              >
+                {JSON.stringify(rawSample, null, 2)}
+              </pre>
+            )}
+          </Flex>
+        </Surface>
+      )}
+
+      {hasData ? (
+        <DataTable data={rows} columns={columns} sortable resizable fullWidth />
+      ) : (
+        <Surface padding={24} elevation="raised">
+          <Flex flexDirection="column" gap={8} alignItems="flex-start">
+            <Heading level={4}>Nenhum PR no período</Heading>
+            <Paragraph>
+              {rawCount > 0
+                ? `${rawCount} eventos pull_request no Grail, mas nenhum bateu com a watchlist (brunoxy01/dynatrace-devops-insights).`
+                : "Nenhum evento pull_request foi recebido no Grail. Confira o webhook do GitHub."}
+            </Paragraph>
+          </Flex>
+        </Surface>
+      )}
+
       <Surface padding={12} elevation="raised">
         <Flex flexDirection="column" gap={8}>
           <Flex alignItems="center" justifyContent="space-between">
-            <Text>DQL usada nesta página (cole no Notebook pra explorar)</Text>
+            <Text>DQL usada (cole no Notebook pra explorar)</Text>
             <Button variant="default" onClick={() => setShowDql((v) => !v)}>
               {showDql ? "Ocultar" : "Mostrar"}
             </Button>
@@ -118,56 +175,6 @@ export const PullRequests: React.FC = () => {
           )}
         </Flex>
       </Surface>
-
-      {hasData ? (
-        <DataTable data={rows} columns={columns} sortable resizable fullWidth />
-      ) : (
-        <Surface padding={24} elevation="raised">
-          <Flex flexDirection="column" gap={8} alignItems="flex-start">
-            <Heading level={4}>Nenhum PR detectado no período</Heading>
-            <Paragraph>Pra popular esta tela:</Paragraph>
-            <ul style={{ margin: 0, paddingLeft: 20 }}>
-              <li>
-                Confirme no GitHub que o webhook tem o evento <code>Pull requests</code> habilitado
-              </li>
-              <li>Aumente o time range (Last 24h ou mais)</li>
-              <li>Abra ou atualize um PR pra disparar o evento</li>
-            </ul>
-          </Flex>
-        </Surface>
-      )}
-
-      {hasData && rawSample && (
-        <Surface padding={12} elevation="raised">
-          <Flex flexDirection="column" gap={8}>
-            <Flex alignItems="center" justifyContent="space-between">
-              <Text>
-                Debug — JSON completo do primeiro evento (me copia se o autor/título estiverem
-                vazios pra eu corrigir o mapping)
-              </Text>
-              <Button variant="default" onClick={() => setShowRaw((v) => !v)}>
-                {showRaw ? "Ocultar" : "Mostrar"}
-              </Button>
-            </Flex>
-            {showRaw && (
-              <pre
-                style={{
-                  margin: 0,
-                  padding: 12,
-                  background: "var(--dt-colors-background-surface-primary-default)",
-                  fontSize: 12,
-                  overflow: "auto",
-                  maxHeight: 400,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-all",
-                }}
-              >
-                {JSON.stringify(rawSample, null, 2)}
-              </pre>
-            )}
-          </Flex>
-        </Surface>
-      )}
     </Flex>
   );
 };

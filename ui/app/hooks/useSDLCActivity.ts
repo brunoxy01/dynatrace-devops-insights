@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useDql } from "@dynatrace-sdk/react-hooks";
 import { useTimeRange } from "../state/TimeRangeContext";
-import { repoFilterDql } from "../config";
+import { matchesWatchlist } from "../config";
 
 export interface Contributor {
   name: string;
@@ -12,8 +12,18 @@ export interface Contributor {
   lastActivity: string;
 }
 
+export interface ActivityEvent {
+  timestamp: string;
+  type: string;
+  status: string;
+  author: string;
+  repository: string;
+  branch: string;
+}
+
 export interface ActivitySnapshot {
   contributors: Contributor[];
+  recent: ActivityEvent[];
   totals: {
     pullRequestEvents: number;
     pushEvents: number;
@@ -21,9 +31,11 @@ export interface ActivitySnapshot {
     runEvents: number;
     distinctAuthors: number;
   };
+  byType: Record<string, number>;
   isLoading: boolean;
   error?: Error;
   rawCount: number;
+  matchedCount: number;
   rawSample?: Record<string, unknown>;
   dqlQuery: string;
 }
@@ -61,12 +73,35 @@ function authorOf(record: Record<string, unknown>): string {
   );
 }
 
+function repoOf(record: Record<string, unknown>): string {
+  return pick(record, [
+    "repository.full_name",
+    "pull_request.base.repo.full_name",
+    "payload.repository.full_name",
+    "payload.pull_request.base.repo.full_name",
+    "vcs.repository.name",
+  ]);
+}
+
+function branchOf(record: Record<string, unknown>): string {
+  return pick(
+    record,
+    [
+      "pull_request.head.ref",
+      "payload.pull_request.head.ref",
+      "head_branch",
+      "ref",
+      "vcs.repository.ref.name",
+    ],
+    "—",
+  );
+}
+
 function buildQuery(fromIso: string, toIso: string): string {
   return `fetch events, from: "${fromIso}", to: "${toIso}"
 | filter event.kind == "SDLC_EVENT"
-| filter ${repoFilterDql()}
 | sort timestamp desc
-| limit 1000`;
+| limit 2000`;
 }
 
 export function useSDLCActivity(): ActivitySnapshot {
@@ -78,6 +113,7 @@ export function useSDLCActivity(): ActivitySnapshot {
 
   return useMemo(() => {
     const records = (data?.records ?? []) as Record<string, unknown>[];
+    const matched = records.filter((r) => matchesWatchlist(repoOf(r)));
     const byAuthor = new Map<string, Contributor>();
     const totals = {
       pullRequestEvents: 0,
@@ -86,17 +122,34 @@ export function useSDLCActivity(): ActivitySnapshot {
       runEvents: 0,
       distinctAuthors: 0,
     };
+    const byType: Record<string, number> = {};
+    const recent: ActivityEvent[] = [];
 
-    for (const r of records) {
+    for (const r of matched) {
       const type = String(r["event.type"] ?? "");
       const status = String(r["event.status"] ?? "").toLowerCase();
       const ts = String(r["timestamp"] ?? "");
       const author = authorOf(r);
+      const repo = repoOf(r);
+      const branch = branchOf(r);
+
+      byType[type] = (byType[type] ?? 0) + 1;
 
       if (type === "pull_request") totals.pullRequestEvents++;
       else if (type === "push") totals.pushEvents++;
       else if (type === "build") totals.buildEvents++;
       else if (type === "run") totals.runEvents++;
+
+      if (recent.length < 30) {
+        recent.push({
+          timestamp: ts,
+          type,
+          status,
+          author: author || "unknown",
+          repository: repo || "—",
+          branch,
+        });
+      }
 
       if (!author) continue;
       const c =
@@ -120,18 +173,20 @@ export function useSDLCActivity(): ActivitySnapshot {
     }
 
     const contributors = Array.from(byAuthor.values()).sort(
-      (a, b) =>
-        b.prsOpened + b.commits + b.builds - (a.prsOpened + a.commits + a.builds),
+      (a, b) => b.prsOpened + b.commits + b.builds - (a.prsOpened + a.commits + a.builds),
     );
     totals.distinctAuthors = contributors.length;
 
     return {
       contributors,
+      recent,
       totals,
+      byType,
       isLoading,
       error: error as Error | undefined,
       rawCount: records.length,
-      rawSample: records[0] as Record<string, unknown> | undefined,
+      matchedCount: matched.length,
+      rawSample: matched[0] as Record<string, unknown> | undefined,
       dqlQuery: query,
     };
   }, [data, isLoading, error, query]);
