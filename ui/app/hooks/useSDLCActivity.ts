@@ -35,10 +35,14 @@ export interface ActivitySnapshot {
 const FALLBACK_QUERY = "fetch dt.entity.host | limit 0";
 
 function buildQuery(fromIso: string, toIso: string): string {
+  // Filtra os tipos de PR/MR no servidor. Sem isso, o volume de demo data da
+  // tenant (build/run/push de outros repos) saturava o limit e empurrava os
+  // nossos eventos pra fora, zerando os contribuidores.
   return `fetch events, from: "${fromIso}", to: "${toIso}"
 | filter event.kind == "SDLC_EVENT"
+| filter event.type == "pull_request" or event.type == "merge_request" or event.type == "change"
 | sort timestamp desc
-| limit 2000`;
+| limit 1000`;
 }
 
 // Contribuidor é identificado por provider + nome: brunoxy01 no GitHub e
