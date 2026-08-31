@@ -5,6 +5,7 @@
 export const REPO_WATCHLIST = [
   "brunoxy01/dynatrace-devops-insights",
   "brunoxy01/dynatrace-mr-lab",
+  "brunoxy01/pipeline-deploy-demo",
 ];
 
 // Match client-side. O DQL não consegue filtrar por `repository.full_name`
