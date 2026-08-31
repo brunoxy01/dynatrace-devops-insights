@@ -128,10 +128,13 @@ export function isPrEvent(r: Record<string, unknown>): boolean {
   return PR_EVENT_TYPES.includes(String(r["event.type"] ?? ""));
 }
 
-// Chave de dedup: vários eventos do mesmo PR colapsam. Preferimos número,
-// depois branch. Sem nenhum, retorna "" (evento sem contexto de PR → ignora).
+// Chave de dedup: vários eventos do mesmo PR colapsam. Preferimos a BRANCH,
+// porque uma branch de origem é única por PR aberto e vem tanto nos eventos
+// pull_request "puros" quanto nos derivados de workflow — assim eventos do
+// mesmo PR não se separam por alguns terem número e outros não. Sem branch,
+// caímos no número; sem nenhum, "" (evento sem contexto de PR → ignora).
 export function prDedupKey(repo: string, number: string, branch: string): string {
-  if (number) return `${repo}#${number}`;
   if (branch) return `${repo}@${branch}`;
+  if (number) return `${repo}#${number}`;
   return "";
 }

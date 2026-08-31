@@ -48,7 +48,10 @@ function mapRecord(r: Record<string, unknown>, i: number): PullRequest {
 function dedupLatestPerPR(prs: PullRequest[]): PullRequest[] {
   const map = new Map<string, PullRequest>();
   for (const pr of prs) {
-    const key = pr.number > 0 ? `${pr.repository}#${pr.number}` : `${pr.repository}@${pr.branch}`;
+    // Branch primeiro (única por PR aberto, presente em todos os eventos do
+    // PR), depois número. Evita separar o mesmo PR em duas linhas quando só
+    // parte dos eventos traz o número.
+    const key = pr.branch ? `${pr.repository}@${pr.branch}` : `${pr.repository}#${pr.number}`;
     const existing = map.get(key);
     if (!existing || new Date(pr.updatedAt).getTime() >= new Date(existing.updatedAt).getTime()) {
       map.set(key, pr);
