@@ -10,6 +10,8 @@ import { useFilters } from "../state/FilterContext";
 import { useSDLCPullRequests } from "../hooks/useSDLCPullRequests";
 import { useTimeRange } from "../state/TimeRangeContext";
 import { repoUrl } from "../config";
+import { ProviderIcon } from "../components/ProviderIcon";
+import { matchesPrFilters } from "../data/filterMatch";
 
 const providerLabel = (id: PullRequest["provider"]): string =>
   PROVIDERS.find((p) => p.id === id)?.label ?? id;
@@ -20,12 +22,7 @@ export const PullRequests: React.FC = () => {
   const { data: prsData, isLoading, matchedCount } = useSDLCPullRequests();
 
   const rows = useMemo(() => {
-    return prsData.filter((p) => {
-      if (p.state !== "open") return false;
-      if (applied.author?.length && !applied.author.includes(p.author)) return false;
-      if (applied.branch?.length && !applied.branch.includes(p.branch)) return false;
-      return true;
-    });
+    return prsData.filter((p) => p.state === "open" && matchesPrFilters(p, applied));
   }, [prsData, applied]);
 
   const columns = useMemo<DataTableColumnDef<PullRequest>[]>(
@@ -73,6 +70,12 @@ export const PullRequests: React.FC = () => {
         header: "Provider",
         accessor: (r) => providerLabel(r.provider),
         width: 140,
+        cell: ({ rowData }) => (
+          <Flex alignItems="center" gap={6}>
+            <ProviderIcon provider={rowData.provider} size={16} />
+            <Text>{providerLabel(rowData.provider)}</Text>
+          </Flex>
+        ),
       },
       { id: "createdAt", header: "Criado em", accessor: "createdAt", width: 240 },
     ],
@@ -84,16 +87,26 @@ export const PullRequests: React.FC = () => {
       <Flex flexDirection="column" gap={4} alignItems="flex-start">
         <Flex alignItems="center" gap={12}>
           <Heading level={2}>Pull / Merge Requests abertos</Heading>
-          <Chip color={matchedCount > 0 ? "success" : "neutral"}>
-            {matchedCount > 0 ? `${rows.length} aberto(s)` : "sem PRs"}
+          <Chip color={rows.length > 0 ? "success" : "neutral"}>
+            {rows.length > 0 ? `${rows.length} aberto(s)` : "sem PRs"}
           </Chip>
           {isLoading && <Text>carregando…</Text>}
         </Flex>
         <Paragraph>{range.label} · dados dos SDLC events ingeridos via webhook</Paragraph>
       </Flex>
 
-      {matchedCount > 0 ? (
+      {rows.length > 0 ? (
         <DataTable data={rows} columns={columns} sortable resizable fullWidth />
+      ) : matchedCount > 0 ? (
+        <Surface padding={24} elevation="raised">
+          <Flex flexDirection="column" gap={8} alignItems="flex-start">
+            <Heading level={4}>Nenhum PR bate com o filtro aplicado</Heading>
+            <Paragraph>
+              Há {matchedCount} PR(s) no período, mas nenhum casa com o filtro digitado na barra
+              acima. Ajuste ou remova o filtro.
+            </Paragraph>
+          </Flex>
+        </Surface>
       ) : (
         <Surface padding={24} elevation="raised">
           <Flex flexDirection="column" gap={8} alignItems="flex-start">

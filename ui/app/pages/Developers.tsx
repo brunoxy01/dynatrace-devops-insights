@@ -8,6 +8,8 @@ import { useSDLCActivity, type Contributor } from "../hooks/useSDLCActivity";
 import { useTimeRange } from "../state/TimeRangeContext";
 import { useFilters } from "../state/FilterContext";
 import { PROVIDERS } from "../data/types";
+import { ProviderIcon } from "../components/ProviderIcon";
+import { matchesContributorFilters } from "../data/filterMatch";
 
 const providerLabel = (id: Contributor["provider"]): string =>
   PROVIDERS.find((p) => p.id === id)?.label ?? id;
@@ -27,9 +29,8 @@ export const Developers: React.FC = () => {
   const { contributors, isLoading, matchedCount } = useSDLCActivity();
 
   const rows = useMemo(() => {
-    if (!applied.author?.length) return contributors;
-    return contributors.filter((c) => applied.author!.includes(c.name));
-  }, [contributors, applied.author]);
+    return contributors.filter((c) => matchesContributorFilters(c, applied));
+  }, [contributors, applied]);
 
   const columns = useMemo<DataTableColumnDef<Contributor>[]>(
     () => [
@@ -39,6 +40,12 @@ export const Developers: React.FC = () => {
         header: "Provider",
         accessor: (c) => providerLabel(c.provider),
         width: 160,
+        cell: ({ rowData }) => (
+          <Flex alignItems="center" gap={6}>
+            <ProviderIcon provider={rowData.provider} size={16} />
+            <Text>{providerLabel(rowData.provider)}</Text>
+          </Flex>
+        ),
       },
       { id: "prsOpen", header: "PRs abertos", accessor: "prsOpen", width: 150 },
       {
@@ -68,14 +75,18 @@ export const Developers: React.FC = () => {
         <Surface padding={24} elevation="raised">
           <Flex flexDirection="column" gap={8} alignItems="flex-start">
             <Heading level={4}>
-              {matchedCount > 0
-                ? "Eventos sem autor identificado"
-                : "Sem eventos no período"}
+              {contributors.length > 0
+                ? "Nenhum contribuidor bate com o filtro aplicado"
+                : matchedCount > 0
+                  ? "Eventos sem autor identificado"
+                  : "Sem eventos no período"}
             </Heading>
             <Paragraph>
-              {matchedCount > 0
-                ? "Há eventos no Grail mas nenhum trouxe o autor. Pode ser evento de sistema (workflow run) sem usuário associado."
-                : "Abra um PR ou faça um push pro repositório conectado pra começar a popular."}
+              {contributors.length > 0
+                ? `Há ${contributors.length} contribuidor(es) no período, mas nenhum casa com o filtro digitado na barra acima. Ajuste ou remova o filtro.`
+                : matchedCount > 0
+                  ? "Há eventos no Grail mas nenhum trouxe o autor. Pode ser evento de sistema (workflow run) sem usuário associado."
+                  : "Abra um PR ou faça um push pro repositório conectado pra começar a popular."}
             </Paragraph>
           </Flex>
         </Surface>

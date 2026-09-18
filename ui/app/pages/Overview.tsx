@@ -5,13 +5,12 @@ import { Heading, Paragraph, Text } from "@dynatrace/strato-components/typograph
 import { Chip } from "@dynatrace/strato-components/content";
 import { KpiCard } from "../components/KpiCard";
 import { InsightsPanel } from "../components/InsightsPanel";
+import { ProviderIcon } from "../components/ProviderIcon";
 import { useSDLCActivity } from "../hooks/useSDLCActivity";
 import { useSDLCPullRequests } from "../hooks/useSDLCPullRequests";
 import { useTimeRange } from "../state/TimeRangeContext";
-import { PROVIDERS, type Provider } from "../data/types";
-
-const providerLabel = (id: Provider): string =>
-  PROVIDERS.find((p) => p.id === id)?.label ?? id;
+import { useFilters } from "../state/FilterContext";
+import { matchesContributorFilters, matchesPrFilters } from "../data/filterMatch";
 
 const fmtRelative = (iso: string): string => {
   if (!iso) return "—";
@@ -27,31 +26,41 @@ const fmtRelative = (iso: string): string => {
 export const Overview: React.FC = () => {
   const navigate = useNavigate();
   const { range } = useTimeRange();
+  const { applied } = useFilters();
   const activity = useSDLCActivity();
   const { data: prs, matchedCount: prMatched } = useSDLCPullRequests();
 
+  const filteredPrs = useMemo(
+    () => prs.filter((p) => p.state === "open" && matchesPrFilters(p, applied)),
+    [prs, applied],
+  );
+  const filteredContributors = useMemo(
+    () => activity.contributors.filter((c) => matchesContributorFilters(c, applied)),
+    [activity.contributors, applied],
+  );
+
   const stats = useMemo(() => {
-    const open = prs.filter((p) => p.state === "open").length;
-    const top = activity.contributors[0];
+    const top = filteredContributors[0];
     return {
-      contributors: activity.totals.distinctAuthors,
-      openPrs: open,
+      openPrs: filteredPrs.length,
+      contributors: filteredContributors.length,
       topContributor: top?.name ?? "—",
-      topContributorHint: top
-        ? `${providerLabel(top.provider)} · ${top.prsOpen} PR(s) aberto(s)`
-        : undefined,
+      topContributorProvider: top?.provider,
+      topContributorHint: top ? `${top.prsOpen} PR(s) aberto(s)` : undefined,
     };
-  }, [activity, prs]);
+  }, [filteredPrs, filteredContributors]);
 
   const hasData = activity.matchedCount > 0 || prMatched > 0;
+  const hasFilteredData = filteredPrs.length > 0 || filteredContributors.length > 0;
+  const isFilterActive = Object.keys(applied).length > 0;
 
   return (
     <Flex flexDirection="column" padding={24} gap={24}>
       <Flex flexDirection="column" gap={4}>
         <Flex alignItems="center" gap={12}>
           <Heading>DevOps Insights</Heading>
-          <Chip color={hasData ? "success" : "neutral"}>
-            {hasData ? "dados reais (Grail)" : "sem dados"}
+          <Chip color={hasFilteredData ? "success" : "neutral"}>
+            {hasFilteredData ? "dados reais (Grail)" : "sem dados"}
           </Chip>
           {activity.isLoading && <Text>carregando…</Text>}
         </Flex>
@@ -65,6 +74,16 @@ export const Overview: React.FC = () => {
             <Paragraph>
               Abra um PR, faça um push ou rode o workflow. Se já fez, aumente o time range no
               canto superior direito.
+            </Paragraph>
+          </Flex>
+        </Surface>
+      ) : !hasFilteredData && !activity.isLoading ? (
+        <Surface padding={24} elevation="raised">
+          <Flex flexDirection="column" gap={8} alignItems="flex-start">
+            <Heading level={4}>Nenhum dado bate com o filtro aplicado</Heading>
+            <Paragraph>
+              Há eventos no período, mas nenhum casa com o filtro digitado na barra acima. Ajuste
+              ou remova o filtro.
             </Paragraph>
           </Flex>
         </Surface>
@@ -85,28 +104,37 @@ export const Overview: React.FC = () => {
               label="Top contribuidor"
               value={stats.topContributor}
               hint={stats.topContributorHint}
+              icon={
+                stats.topContributorProvider && (
+                  <ProviderIcon provider={stats.topContributorProvider} size={20} />
+                )
+              }
               onClick={() => navigate("/developers")}
             />
           </Flex>
 
-          <InsightsPanel contributors={activity.contributors} prs={prs} />
+          <InsightsPanel contributors={filteredContributors} prs={filteredPrs} />
 
           <Surface padding={16} elevation="raised" className="dt-hover-card">
             <Flex flexDirection="column" gap={12}>
-              <Heading level={4}>Contribuidores</Heading>
-              {activity.contributors.length === 0 ? (
+              <Flex alignItems="center" gap={8}>
+                <Heading level={4}>Contribuidores</Heading>
+                {isFilterActive && <Chip color="primary">filtrado</Chip>}
+              </Flex>
+              {filteredContributors.length === 0 ? (
                 <Text>Nenhum contribuidor identificado no período.</Text>
               ) : (
-                activity.contributors.map((c, i) => (
+                filteredContributors.map((c, i) => (
                   <Flex
                     key={`${c.provider}|${c.name}`}
                     justifyContent="space-between"
                     alignItems="center"
                   >
-                    <Text>
-                      {i + 1}. {c.name}{" "}
-                      <Text textStyle="small">· {providerLabel(c.provider)}</Text>
-                    </Text>
+                    <Flex alignItems="center" gap={8}>
+                      <Text>{i + 1}.</Text>
+                      <ProviderIcon provider={c.provider} size={16} />
+                      <Text>{c.name}</Text>
+                    </Flex>
                     <Text textStyle="small">
                       {c.prsOpen} PR(s) · {fmtRelative(c.lastActivity)}
                     </Text>
