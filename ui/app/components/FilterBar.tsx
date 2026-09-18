@@ -46,6 +46,11 @@ export const FilterBar: React.FC = () => {
           valueType: "String",
           details: "Git branch name",
         },
+        {
+          key: "release",
+          valueType: "String",
+          details: "Release tag (e.g. v0.18.1)",
+        },
       ],
       exhaustive: false,
     };

@@ -8,6 +8,7 @@ export interface AppliedFilters {
   environment?: string[];
   author?: string[];
   branch?: string[];
+  release?: string[];
 }
 
 interface FilterContextValue {

@@ -22,6 +22,18 @@ export interface PullRequest {
   deletions: number;
 }
 
+export interface Release {
+  id: string;
+  tagName: string;
+  name: string;
+  repository: string;
+  provider: Provider;
+  author: string;
+  url: string;
+  publishedAt: string;
+  prerelease: boolean;
+}
+
 export interface TimeRange {
   from: string;
   to: string;

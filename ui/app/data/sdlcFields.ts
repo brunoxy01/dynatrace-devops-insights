@@ -172,3 +172,96 @@ export function prDedupKey(repo: string, number: string, branch: string): string
   if (number) return `${repo}#${number}`;
   return "";
 }
+
+// --- Releases ---------------------------------------------------------
+//
+// Confirmado via webhook real do GitHub (payload completo inspecionado):
+// `{ action, release: { tag_name, name, html_url, author.login,
+// created_at, published_at, prerelease, draft }, repository, sender }`.
+// Seguindo o MESMO padrão descoberto para PRs, a entidade "release" deve
+// chegar com event.type/event.category nulos e a informação real no
+// campo `action` + objeto `release`.
+//
+// GitLab usa um schema diferente e mais plano (object_kind: "release",
+// tag, name, description, released_at, project, url) — sem objeto
+// aninhado "release". Candidatos abaixo cobrem os dois.
+//
+// Azure DevOps NÃO tem um conceito de webhook nativo equivalente a
+// "release" no sentido de tag/versão do GitHub — o mais próximo é
+// "Release deployment completed" (Classic Release Management), que é
+// sobre deploy, não sobre tag. Os candidatos abaixo são best-effort e
+// NÃO foram testados contra um webhook real do Azure DevOps.
+
+export const RELEASE_ENTITY_ACTIONS = [
+  "published",
+  "released",
+  "created",
+  "edited",
+  "prereleased",
+];
+
+function hasReleasePayload(r: Record<string, unknown>): boolean {
+  return Boolean(
+    resolveField(r, "release") ?? resolveField(r, "object_attributes") ?? resolveString(r, ["tag"]),
+  );
+}
+
+export function isReleaseEvent(r: Record<string, unknown>): boolean {
+  const type = String(r["event.type"] ?? "");
+  if (type === "release") return hasReleasePayload(r);
+  if (!type) {
+    const action = String(r["action"] ?? "");
+    return RELEASE_ENTITY_ACTIONS.includes(action) && hasReleasePayload(r);
+  }
+  return false;
+}
+
+export function releaseTagName(r: Record<string, unknown>): string {
+  return resolveString(r, [
+    "release.tag_name", // github
+    "tag_name", // gitlab (confirmado via API de releases: tag_name, não tag)
+    "tag", // gitlab — variante alternativa, mantida por precaução
+    "object_attributes.tag_name", // azure/best-effort
+  ]);
+}
+
+export function releaseName(r: Record<string, unknown>): string {
+  return resolveString(r, [
+    "release.name",
+    "name", // gitlab
+    "object_attributes.name",
+  ]);
+}
+
+export function releaseUrl(r: Record<string, unknown>): string {
+  return resolveString(r, [
+    "release.html_url", // github
+    "url", // gitlab (top-level no webhook)
+    "_links.self", // gitlab REST API
+    "object_attributes.url",
+  ]);
+}
+
+export function releaseAuthor(r: Record<string, unknown>): string {
+  return resolveString(r, [
+    "release.author.login", // github
+    "author.username", // gitlab (confirmado via API)
+    "sender.login",
+    "commit.author_name", // gitlab fallback: autor do commit referenciado
+    "object_attributes.author.username",
+  ]);
+}
+
+export function releasePublishedAt(r: Record<string, unknown>): string {
+  return resolveString(r, [
+    "release.published_at",
+    "release.created_at",
+    "released_at", // gitlab
+    "object_attributes.released_at",
+    "timestamp",
+  ]);
+}
+
+export function releasePrerelease(r: Record<string, unknown>): boolean {
+  return resolveString(r, ["release.prerelease"]).toLowerCase() === "true";
+}

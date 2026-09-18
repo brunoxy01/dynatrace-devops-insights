@@ -6,6 +6,7 @@ import { FilterBar } from "./components/FilterBar";
 import { Overview } from "./pages/Overview";
 import { Developers } from "./pages/Developers";
 import { PullRequests } from "./pages/PullRequests";
+import { Releases } from "./pages/Releases";
 import { FilterProvider } from "./state/FilterContext";
 import { TimeRangeProvider } from "./state/TimeRangeContext";
 import { ToastContainer } from "@dynatrace/strato-components/notifications";
@@ -24,6 +25,7 @@ export const App = () => {
             <Routes>
               <Route path="/" element={<Overview />} />
               <Route path="/pull-requests" element={<PullRequests />} />
+              <Route path="/releases" element={<Releases />} />
               <Route path="/developers" element={<Developers />} />
             </Routes>
           </Page.Main>
