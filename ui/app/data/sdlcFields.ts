@@ -1,5 +1,5 @@
 import type { Provider } from "./types";
-import { resolveString } from "./eventFields";
+import { resolveField, resolveString } from "./eventFields";
 
 // Extractors que funcionam para os DOIS schemas de SDLC event que recebemos:
 //
@@ -124,8 +124,42 @@ export function inferState(r: Record<string, unknown>): "open" | "merged" | "clo
 // event.types que representam um PR/MR aberto, conforme o provider/adapter.
 export const PR_EVENT_TYPES = ["pull_request", "merge_request", "change"];
 
+// Ações de webhook que representam a ENTIDADE PR (não a pipeline disparada
+// por ela). Descoberto via DQL: pra este adapter, esses eventos chegam com
+// event.type/event.category NULOS — o `event.type` é reservado pro gatilho
+// da pipeline (push/schedule/pull_request-como-trigger). A única forma
+// confiável de achar a entidade PR é pelo campo `action` + a presença do
+// objeto `pull_request`/`object_attributes` no payload.
+export const PR_ENTITY_ACTIONS = [
+  "opened",
+  "edited",
+  "synchronize",
+  "reopened",
+  "closed",
+  "ready_for_review",
+  "converted_to_draft",
+];
+
+function hasPrPayload(r: Record<string, unknown>): boolean {
+  return Boolean(resolveField(r, "pull_request") ?? resolveField(r, "object_attributes"));
+}
+
 export function isPrEvent(r: Record<string, unknown>): boolean {
-  return PR_EVENT_TYPES.includes(String(r["event.type"] ?? ""));
+  const type = String(r["event.type"] ?? "");
+  // GitLab/Azure semantic dictionary: "change" já É a entidade PR, sem
+  // objeto pull_request/object_attributes bruto — não dá pra exigir payload.
+  if (type === "change") return true;
+  // GitHub/GitLab brutos: esse MESMO event.type também marca pipelines
+  // disparadas por um PR (sem payload da entidade). Só conta se o objeto
+  // pull_request/object_attributes estiver presente de fato.
+  if (type === "pull_request" || type === "merge_request") return hasPrPayload(r);
+  // event.type null/vazio: só conta se a ação for de PR E o payload carregar
+  // o objeto da PR (evita falso positivo com Issues, que também usam "opened").
+  if (!type) {
+    const action = String(r["action"] ?? "");
+    return PR_ENTITY_ACTIONS.includes(action) && hasPrPayload(r);
+  }
+  return false;
 }
 
 // Chave de dedup: vários eventos do mesmo PR colapsam. Preferimos a BRANCH,

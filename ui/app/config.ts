@@ -17,6 +17,15 @@ export function matchesWatchlist(repoFullName: string | undefined): boolean {
   return REPO_WATCHLIST.includes(repoFullName);
 }
 
+// Cláusula DQL pra filtrar por repo NO SERVIDOR usando `contains()` sobre o
+// campo bruto (string JSON), em vez de nested access. Confirmado que funciona
+// via Notebook. Reduz drasticamente o volume escaneado (a tenant tem muito
+// demo data de outras orgs) e evita o bug de `limit` sendo saturado antes de
+// chegar nos nossos eventos.
+export function repoContainsFilterDql(): string {
+  return REPO_WATCHLIST.map((r) => `contains(repository, "${r}")`).join(" or ");
+}
+
 // URL clicável a partir do full name + provider.
 export function repoUrl(fullName: string, provider?: string): string {
   const base =

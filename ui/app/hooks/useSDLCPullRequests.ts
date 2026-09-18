@@ -2,12 +2,13 @@ import { useMemo } from "react";
 import { useDql } from "@dynatrace-sdk/react-hooks";
 import type { PullRequest } from "../data/types";
 import { useTimeRange } from "../state/TimeRangeContext";
-import { matchesWatchlist } from "../config";
+import { matchesWatchlist, repoContainsFilterDql } from "../config";
 import {
   authorName,
   branchName,
   eventProvider,
   inferState,
+  isPrEvent,
   prNumber,
   prTitle,
   prUrl,
@@ -64,12 +65,19 @@ function dedupLatestPerPR(prs: PullRequest[]): PullRequest[] {
 
 const FALLBACK_QUERY = "fetch dt.entity.host | limit 0";
 
+// Descoberto via DQL: a entidade PR (com título/autor/número reais) chega
+// com event.type NULO nesse adapter — event.type é usado pro gatilho da
+// pipeline (push/schedule/pull_request-como-trigger), não pra entidade em
+// si. Por isso filtramos também por `action`, que é onde a entidade PR
+// aparece de fato (opened/edited/synchronize/closed/reopened).
 function buildQuery(fromIso: string, toIso: string): string {
-  // pull_request = GitHub · merge_request = GitLab/Azure brutos ·
-  // change = schema semântico (GitLab/Azure via adapter oficial)
   return `fetch events, from: "${fromIso}", to: "${toIso}"
 | filter event.kind == "SDLC_EVENT"
+| filter ${repoContainsFilterDql()}
 | filter event.type == "pull_request" or event.type == "merge_request" or event.type == "change"
+   or action == "opened" or action == "edited" or action == "synchronize"
+   or action == "reopened" or action == "closed" or action == "ready_for_review"
+   or action == "converted_to_draft"
 | sort timestamp desc
 | limit 500`;
 }
@@ -92,7 +100,10 @@ export function useSDLCPullRequests(): UseSDLCPullRequestsResult {
         dqlQuery: query,
       };
     }
-    const mapped = records.map(mapRecord);
+    // Descarta ruído de pipeline (build/deploy disparados por PR, que
+    // compartilham event.type com a entidade PR mas não trazem o payload).
+    const prEvents = records.filter(isPrEvent);
+    const mapped = prEvents.map(mapRecord);
     const matched = mapped.filter((p) => matchesWatchlist(p.repository));
     // Descarta eventos sem número nem branch (sem como identificar o PR).
     const identifiable = matched.filter((p) => p.number > 0 || p.branch);

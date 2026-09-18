@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useDql } from "@dynatrace-sdk/react-hooks";
 import { useTimeRange } from "../state/TimeRangeContext";
-import { matchesWatchlist } from "../config";
+import { matchesWatchlist, repoContainsFilterDql } from "../config";
 import type { Provider } from "../data/types";
 import {
   authorName,
@@ -35,12 +35,18 @@ export interface ActivitySnapshot {
 const FALLBACK_QUERY = "fetch dt.entity.host | limit 0";
 
 function buildQuery(fromIso: string, toIso: string): string {
-  // Filtra os tipos de PR/MR no servidor. Sem isso, o volume de demo data da
-  // tenant (build/run/push de outros repos) saturava o limit e empurrava os
-  // nossos eventos pra fora, zerando os contribuidores.
+  // Filtra por repo (contains sobre a string bruta) e pelos tipos/ações que
+  // podem representar a entidade PR no servidor. Sem isso, o volume de demo
+  // data da tenant saturava o limit e empurrava nossos eventos pra fora — e
+  // a entidade PR real chega com event.type NULO neste adapter, então
+  // também precisamos filtrar por `action` (ver sdlcFields.ts).
   return `fetch events, from: "${fromIso}", to: "${toIso}"
 | filter event.kind == "SDLC_EVENT"
+| filter ${repoContainsFilterDql()}
 | filter event.type == "pull_request" or event.type == "merge_request" or event.type == "change"
+   or action == "opened" or action == "edited" or action == "synchronize"
+   or action == "reopened" or action == "closed" or action == "ready_for_review"
+   or action == "converted_to_draft"
 | sort timestamp desc
 | limit 1000`;
 }
@@ -57,7 +63,10 @@ export function useSDLCActivity(): ActivitySnapshot {
 
   return useMemo(() => {
     const records = (data?.records ?? []) as Record<string, unknown>[];
-    const matched = records.filter((r) => matchesWatchlist(repoFullName(r)));
+    // Descarta ruído de pipeline (mesmo event.type da entidade PR, mas sem
+    // o payload — ver isPrEvent em sdlcFields.ts).
+    const prRecords = records.filter(isPrEvent);
+    const matched = prRecords.filter((r) => matchesWatchlist(repoFullName(r)));
 
     const contribByKey = new Map<string, Contributor>();
     const prByKey = new Map<string, { authorKey: string; ts: string }>();
@@ -75,13 +84,11 @@ export function useSDLCActivity(): ActivitySnapshot {
         contribByKey.set(k, c);
       }
 
-      if (isPrEvent(r)) {
-        const dk = prDedupKey(repoFullName(r), prNumber(r), branchName(r));
-        if (dk) {
-          const existing = prByKey.get(dk);
-          if (!existing || ts > existing.ts) {
-            prByKey.set(dk, { authorKey: author ? contribKey(provider, author) : "", ts });
-          }
+      const dk = prDedupKey(repoFullName(r), prNumber(r), branchName(r));
+      if (dk) {
+        const existing = prByKey.get(dk);
+        if (!existing || ts > existing.ts) {
+          prByKey.set(dk, { authorKey: author ? contribKey(provider, author) : "", ts });
         }
       }
     }
