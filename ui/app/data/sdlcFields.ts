@@ -66,7 +66,8 @@ export function authorName(r: Record<string, unknown>): string {
   return resolveString(r, [
     "pull_request.user.login", // github bruto
     "sender.login",
-    "vcs.change.author", // semantic dictionary
+    "ext.task.sender.name", // gitlab semantic dictionary — confirmado via DQL real
+    "vcs.change.author",
     "vcs.change.author.name",
     "vcs.change.author.username",
     "vcs.author.name",
@@ -102,6 +103,7 @@ export function prTitle(r: Record<string, unknown>): string {
 export function prUrl(r: Record<string, unknown>): string {
   return resolveString(r, [
     "pull_request.html_url",
+    "vcs.change.url.full", // gitlab semantic dictionary — confirmado via DQL real
     "vcs.change.url",
     "object_attributes.url",
     "vcs.repository.url.full",
@@ -113,11 +115,13 @@ export function inferState(r: Record<string, unknown>): "open" | "merged" | "clo
     "pull_request.state",
     "object_attributes.state",
     "vcs.change.status",
+    "event.status", // gitlab semantic dictionary: "opened"/"closed"/"merged"
+    "ext.task.action",
     "event.outcome",
     "state",
   ]).toLowerCase();
-  if (resolveString(r, ["pull_request.merged"]) === "true" || s === "merged") return "merged";
-  if (s === "closed") return "closed";
+  if (resolveString(r, ["pull_request.merged"]) === "true" || s.includes("merg")) return "merged";
+  if (s.includes("clos")) return "closed";
   return "open";
 }
 
@@ -246,6 +250,7 @@ export function releaseAuthor(r: Record<string, unknown>): string {
   return resolveString(r, [
     "release.author.login", // github
     "author.username", // gitlab (confirmado via API)
+    "ext.task.sender.name", // gitlab semantic dictionary — mesmo campo confirmado pra "change"
     "sender.login",
     "commit.author_name", // gitlab fallback: autor do commit referenciado
     "object_attributes.author.username",
