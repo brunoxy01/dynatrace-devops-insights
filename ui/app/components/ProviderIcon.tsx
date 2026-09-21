@@ -13,20 +13,22 @@ const GitHubIcon: React.FC<{ size: number }> = ({ size }) => (
   </svg>
 );
 
+// Cores oficiais da marca GitLab (gradiente laranja do tanuki).
 const GitLabIcon: React.FC<{ size: number }> = ({ size }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M12 22.5 16.1 9.9H7.9L12 22.5Z" opacity="0.6" />
-    <path d="M12 22.5 7.9 9.9H2.7L12 22.5Z" />
-    <path d="M2.7 9.9 0.7 15.9c-.18.55.02 1.16.49 1.5L12 22.5 2.7 9.9Z" opacity="0.85" />
-    <path d="M2.7 9.9h5.2L5.9 2.6c-.13-.4-.7-.4-.83 0L2.7 9.9Z" />
-    <path d="M12 22.5 16.1 9.9h5.2L12 22.5Z" opacity="0.85" />
-    <path d="M21.3 9.9 23.3 15.9c.18.55-.02 1.16-.49 1.5L12 22.5l9.3-12.6Z" opacity="0.6" />
-    <path d="M21.3 9.9h-5.2l2.02-7.3c.13-.4.7-.4.83 0l2.35 7.3Z" opacity="0.6" />
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 22.5 16.1 9.9H7.9L12 22.5Z" fill="#FC6D26" />
+    <path d="M12 22.5 7.9 9.9H2.7L12 22.5Z" fill="#E24329" />
+    <path d="M2.7 9.9 0.7 15.9c-.18.55.02 1.16.49 1.5L12 22.5 2.7 9.9Z" fill="#FC6D26" />
+    <path d="M2.7 9.9h5.2L5.9 2.6c-.13-.4-.7-.4-.83 0L2.7 9.9Z" fill="#E24329" />
+    <path d="M12 22.5 16.1 9.9h5.2L12 22.5Z" fill="#FC6D26" />
+    <path d="M21.3 9.9 23.3 15.9c.18.55-.02 1.16-.49 1.5L12 22.5l9.3-12.6Z" fill="#FC6D26" />
+    <path d="M21.3 9.9h-5.2l2.02-7.3c.13-.4.7-.4.83 0l2.35 7.3Z" fill="#FCA326" />
   </svg>
 );
 
+// Cor oficial da marca Azure DevOps (azul).
 const AzureDevOpsIcon: React.FC<{ size: number }> = ({ size }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="#0078D4" aria-hidden="true">
     <path d="M23 5.6v12.9l-5.7 4.7-8.4-3.1v2.9L4 18.3l-4-5 4.3.3V5.7L14.5 2l7.2 2.1L23 5.6ZM14.4 3.9 6.8 9.6l6.8 1.8 8.5-3.5-7.7-4Zm7.6 5.1-8.6 3.5v7.1l8.6-4.1V9Z" />
   </svg>
 );
