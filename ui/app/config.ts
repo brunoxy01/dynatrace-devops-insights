@@ -1,29 +1,22 @@
-// Repositórios cujos eventos SDLC consideramos parte do nosso projeto.
-// Match exato no nome completo (GitHub: repository.full_name;
-// GitLab: project.path_with_namespace). Tudo que sair daqui é "demo data"
-// de outras orgs e não deve poluir a UI.
-export const REPO_WATCHLIST = [
-  "brunoxy01/dynatrace-devops-insights",
-  "brunoxy01/dynatrace-mr-lab",
-  "brunoxy01/pipeline-deploy-demo",
-];
+// Este app não fixa uma lista de repositórios no código — ele é genérico e
+// deve funcionar pra qualquer cliente, independente de provider, grupo,
+// projeto ou instância. Se o usuário não filtrar nada, mostramos tudo que a
+// tenant tiver de SDLC events. Pra restringir (útil em tenants com volume
+// misto de dados, como sandboxes com demo data), o usuário digita
+// `repository = owner/repo` no FilterField — e isso vira filtro NO SERVIDOR
+// via `contains()`, não uma allowlist fixa.
 
-// Match client-side. O DQL não consegue filtrar por `repository.full_name`
-// porque a chave vem com ponto literal no nome (não é nested access),
-// então filtramos depois do mapping no JS.
-export function matchesWatchlist(repoFullName: string | undefined): boolean {
-  if (!repoFullName) return false;
-  if (REPO_WATCHLIST.length === 0) return true;
-  return REPO_WATCHLIST.includes(repoFullName);
+function escapeDqlString(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-// Cláusula DQL pra filtrar por repo NO SERVIDOR usando `contains()` sobre o
-// campo bruto (string JSON), em vez de nested access. Confirmado que funciona
-// via Notebook. Reduz drasticamente o volume escaneado (a tenant tem muito
-// demo data de outras orgs) e evita o bug de `limit` sendo saturado antes de
-// chegar nos nossos eventos.
-export function repoContainsFilterDql(): string {
-  return REPO_WATCHLIST.map((r) => `contains(repository, "${r}")`).join(" or ");
+// Cláusula DQL opcional pra filtrar por repo no servidor usando `contains()`
+// sobre o campo bruto (string JSON) — confirmado que funciona via Notebook,
+// mesmo sem nested access. Recebe os valores que o usuário digitou no filtro
+// `repository = ...`; se vazio, retorna "" (sem filtro, busca tudo).
+export function repoContainsFilterDql(repos: string[] | undefined): string {
+  if (!repos || repos.length === 0) return "";
+  return repos.map((r) => `contains(repository, "${escapeDqlString(r)}")`).join(" or ");
 }
 
 // URL clicável a partir do full name + provider.

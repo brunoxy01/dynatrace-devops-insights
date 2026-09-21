@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { useDql } from "@dynatrace-sdk/react-hooks";
 import type { PullRequest } from "../data/types";
 import { useTimeRange } from "../state/TimeRangeContext";
-import { matchesWatchlist, repoContainsFilterDql } from "../config";
+import { useFilters } from "../state/FilterContext";
+import { repoContainsFilterDql } from "../config";
 import {
   authorName,
   branchName,
@@ -70,11 +71,14 @@ const FALLBACK_QUERY = "fetch dt.entity.host | limit 0";
 // pipeline (push/schedule/pull_request-como-trigger), não pra entidade em
 // si. Por isso filtramos também por `action`, que é onde a entidade PR
 // aparece de fato (opened/edited/synchronize/closed/reopened).
-function buildQuery(fromIso: string, toIso: string): string {
+//
+// Sem lista fixa de repos: se o usuário filtrou `repository = ...` no
+// FilterField, isso vira filtro NO SERVIDOR (reduz volume em tenants com
+// dado misto). Sem filtro, busca em todos os repos que a tenant tiver.
+function buildQuery(fromIso: string, toIso: string, repoFilter: string): string {
   return `fetch events, from: "${fromIso}", to: "${toIso}"
 | filter event.kind == "SDLC_EVENT"
-| filter ${repoContainsFilterDql()}
-| filter event.type == "pull_request" or event.type == "merge_request" or event.type == "change"
+${repoFilter ? `| filter ${repoFilter}\n` : ""}| filter event.type == "pull_request" or event.type == "merge_request" or event.type == "change"
    or action == "opened" or action == "edited" or action == "synchronize"
    or action == "reopened" or action == "closed" or action == "ready_for_review"
    or action == "converted_to_draft"
@@ -84,8 +88,10 @@ function buildQuery(fromIso: string, toIso: string): string {
 
 export function useSDLCPullRequests(): UseSDLCPullRequestsResult {
   const { fromIso, toIso } = useTimeRange();
+  const { applied } = useFilters();
   const isValidRange = new Date(fromIso).getTime() < new Date(toIso).getTime() - 60_000;
-  const query = isValidRange ? buildQuery(fromIso, toIso) : FALLBACK_QUERY;
+  const repoFilter = repoContainsFilterDql(applied.repository);
+  const query = isValidRange ? buildQuery(fromIso, toIso, repoFilter) : FALLBACK_QUERY;
   const { data, isLoading, error } = useDql({ query });
 
   return useMemo(() => {
@@ -104,14 +110,13 @@ export function useSDLCPullRequests(): UseSDLCPullRequestsResult {
     // compartilham event.type com a entidade PR mas não trazem o payload).
     const prEvents = records.filter(isPrEvent);
     const mapped = prEvents.map(mapRecord);
-    const matched = mapped.filter((p) => matchesWatchlist(p.repository));
     // Descarta eventos sem número nem branch (sem como identificar o PR).
-    const identifiable = matched.filter((p) => p.number > 0 || p.branch);
+    const identifiable = mapped.filter((p) => p.number > 0 || p.branch);
     return {
       data: dedupLatestPerPR(identifiable),
       isLoading,
       rawCount: records.length,
-      matchedCount: matched.length,
+      matchedCount: mapped.length,
       dqlQuery: query,
     };
   }, [data, isLoading, error, isValidRange, query]);

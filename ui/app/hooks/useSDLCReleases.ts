@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { useDql } from "@dynatrace-sdk/react-hooks";
 import type { Release } from "../data/types";
 import { useTimeRange } from "../state/TimeRangeContext";
-import { matchesWatchlist, repoContainsFilterDql } from "../config";
+import { useFilters } from "../state/FilterContext";
+import { repoContainsFilterDql } from "../config";
 import {
   eventProvider,
   isReleaseEvent,
@@ -60,11 +61,10 @@ function dedupLatestPerRelease(releases: Release[]): Release[] {
 
 const FALLBACK_QUERY = "fetch dt.entity.host | limit 0";
 
-function buildQuery(fromIso: string, toIso: string): string {
+function buildQuery(fromIso: string, toIso: string, repoFilter: string): string {
   return `fetch events, from: "${fromIso}", to: "${toIso}"
 | filter event.kind == "SDLC_EVENT"
-| filter ${repoContainsFilterDql()}
-| filter event.type == "release"
+${repoFilter ? `| filter ${repoFilter}\n` : ""}| filter event.type == "release"
    or action == "published" or action == "released" or action == "created"
    or action == "edited" or action == "prereleased"
 | sort timestamp desc
@@ -73,8 +73,10 @@ function buildQuery(fromIso: string, toIso: string): string {
 
 export function useSDLCReleases(): UseSDLCReleasesResult {
   const { fromIso, toIso } = useTimeRange();
+  const { applied } = useFilters();
   const isValidRange = new Date(fromIso).getTime() < new Date(toIso).getTime() - 60_000;
-  const query = isValidRange ? buildQuery(fromIso, toIso) : FALLBACK_QUERY;
+  const repoFilter = repoContainsFilterDql(applied.repository);
+  const query = isValidRange ? buildQuery(fromIso, toIso, repoFilter) : FALLBACK_QUERY;
   const { data, isLoading, error } = useDql({ query });
 
   return useMemo(() => {
@@ -90,13 +92,12 @@ export function useSDLCReleases(): UseSDLCReleasesResult {
     }
     const releaseEvents = records.filter(isReleaseEvent);
     const mapped = releaseEvents.map(mapRecord);
-    const matched = mapped.filter((rel) => matchesWatchlist(rel.repository));
-    const identifiable = matched.filter((rel) => rel.tagName);
+    const identifiable = mapped.filter((rel) => rel.tagName);
     return {
       data: dedupLatestPerRelease(identifiable),
       isLoading,
       rawCount: records.length,
-      matchedCount: matched.length,
+      matchedCount: mapped.length,
     };
   }, [data, isLoading, error, isValidRange, query]);
 }

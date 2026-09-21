@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import { useDql } from "@dynatrace-sdk/react-hooks";
 import { useTimeRange } from "../state/TimeRangeContext";
-import { matchesWatchlist, repoContainsFilterDql } from "../config";
+import { useFilters } from "../state/FilterContext";
+import { repoContainsFilterDql } from "../config";
 import type { Provider } from "../data/types";
 import {
   authorName,
@@ -34,16 +35,14 @@ export interface ActivitySnapshot {
 
 const FALLBACK_QUERY = "fetch dt.entity.host | limit 0";
 
-function buildQuery(fromIso: string, toIso: string): string {
-  // Filtra por repo (contains sobre a string bruta) e pelos tipos/ações que
-  // podem representar a entidade PR no servidor. Sem isso, o volume de demo
-  // data da tenant saturava o limit e empurrava nossos eventos pra fora — e
-  // a entidade PR real chega com event.type NULO neste adapter, então
-  // também precisamos filtrar por `action` (ver sdlcFields.ts).
+// Filtra por repo (se o usuário digitou `repository = ...` no FilterField —
+// sem lista fixa) e pelos tipos/ações que podem representar a entidade PR no
+// servidor. A entidade PR real chega com event.type NULO neste adapter,
+// então também precisamos filtrar por `action` (ver sdlcFields.ts).
+function buildQuery(fromIso: string, toIso: string, repoFilter: string): string {
   return `fetch events, from: "${fromIso}", to: "${toIso}"
 | filter event.kind == "SDLC_EVENT"
-| filter ${repoContainsFilterDql()}
-| filter event.type == "pull_request" or event.type == "merge_request" or event.type == "change"
+${repoFilter ? `| filter ${repoFilter}\n` : ""}| filter event.type == "pull_request" or event.type == "merge_request" or event.type == "change"
    or action == "opened" or action == "edited" or action == "synchronize"
    or action == "reopened" or action == "closed" or action == "ready_for_review"
    or action == "converted_to_draft"
@@ -57,16 +56,17 @@ const contribKey = (provider: Provider, name: string): string => `${provider}|${
 
 export function useSDLCActivity(): ActivitySnapshot {
   const { fromIso, toIso } = useTimeRange();
+  const { applied } = useFilters();
   const isValidRange = new Date(fromIso).getTime() < new Date(toIso).getTime() - 60_000;
-  const query = isValidRange ? buildQuery(fromIso, toIso) : FALLBACK_QUERY;
+  const repoFilter = repoContainsFilterDql(applied.repository);
+  const query = isValidRange ? buildQuery(fromIso, toIso, repoFilter) : FALLBACK_QUERY;
   const { data, isLoading, error } = useDql({ query });
 
   return useMemo(() => {
     const records = (data?.records ?? []) as Record<string, unknown>[];
     // Descarta ruído de pipeline (mesmo event.type da entidade PR, mas sem
     // o payload — ver isPrEvent em sdlcFields.ts).
-    const prRecords = records.filter(isPrEvent);
-    const matched = prRecords.filter((r) => matchesWatchlist(repoFullName(r)));
+    const matched = records.filter(isPrEvent);
 
     const contribByKey = new Map<string, Contributor>();
     const prByKey = new Map<string, { authorKey: string; ts: string }>();

@@ -47,7 +47,14 @@ Consequências:
 - Pra filtrar no DQL use `contains()`: `filter contains(repository, "meu-repo")`
 - No app, [`ui/app/data/eventFields.ts`](ui/app/data/eventFields.ts) tem `resolveField(record, path)` que navega o path fazendo `JSON.parse` das strings ao longo do caminho. Por isso conseguimos extrair `pull_request.user.login`, `commits[].length`, etc.
 
-O filtro por repositório (watchlist em [`ui/app/config.ts`](ui/app/config.ts)) é aplicado **client-side** depois do mapping, justamente porque o DQL não consegue filtrar esses campos.
+Não há uma lista fixa de repositórios no código — o app é genérico e mostra
+todos os SDLC events que a tenant tiver, de qualquer provider/grupo/projeto.
+Se o usuário digitar `repository = owner/repo` no FilterField, isso vira
+filtro **no servidor** via `contains(repository, "...")` (`ui/app/config.ts`,
+função `repoContainsFilterDql`), reduzindo o volume escaneado. Sem esse
+filtro, a query busca em toda a tenant — útil pra um cliente real (sem dado
+misto), mas em ambientes de sandbox com muito demo data de outras orgs,
+vale digitar o filtro pra focar nos seus repositórios.
 
 ## Como rodar localmente
 
