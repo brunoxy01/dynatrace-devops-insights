@@ -6,7 +6,7 @@ App Dynatrace que complementa o app oficial [**Community CI/CD Observability**](
 |---|---|
 | `my.devops.insights` | `https://bwm98081.apps.dynatrace.com/ui/apps/my.devops.insights` |
 
-## Estrutura do repositório
+## Estrutura do repositório 
 
 ```
 .
