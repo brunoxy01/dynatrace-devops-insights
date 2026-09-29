@@ -6,10 +6,11 @@ interface KpiCardProps {
   label: string;
   value: number | string;
   hint?: string;
+  icon?: React.ReactNode;
   onClick?: () => void;
 }
 
-export const KpiCard: React.FC<KpiCardProps> = ({ label, value, hint, onClick }) => {
+export const KpiCard: React.FC<KpiCardProps> = ({ label, value, hint, icon, onClick }) => {
   return (
     <Surface
       padding={16}
@@ -20,7 +21,10 @@ export const KpiCard: React.FC<KpiCardProps> = ({ label, value, hint, onClick })
     >
       <Flex flexDirection="column" gap={4}>
         <Text>{label}</Text>
-        <Heading level={2}>{value}</Heading>
+        <Flex alignItems="center" gap={8}>
+          {icon}
+          <Heading level={2}>{value}</Heading>
+        </Flex>
         {hint && <Text textStyle="small">{hint}</Text>}
       </Flex>
     </Surface>

@@ -1,0 +1,48 @@
+# Pipeline de teste para validar a ingestão de SDLC events no Dynatrace via
+# webhook do GitLab. Só echos do Linux — não compila nada de verdade, existe
+# apenas pra gerar eventos de pipeline/job/deployment no Grail.
+#
+# Copie este arquivo para a RAIZ do repositório GitLab.
+
+stages:
+  - build
+  - test
+  - deploy
+
+# Roda tanto em merge request quanto em push de branch.
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+
+build-job:
+  stage: build
+  script:
+    - echo "🔨 Building the application..."
+    - echo "Commit $CI_COMMIT_SHORT_SHA on branch $CI_COMMIT_REF_NAME"
+    - echo "✅ Build complete."
+
+test-job:
+  stage: test
+  script:
+    - echo "🧪 Running tests..."
+    - echo "Test suite: smoke"
+    - echo "✅ All tests passed."
+
+deploy-staging:
+  stage: deploy
+  script:
+    - echo "🚀 Deploying $CI_COMMIT_SHORT_SHA to staging..."
+    - echo "✅ Deployed to staging."
+  environment:
+    name: staging
+
+deploy-production:
+  stage: deploy
+  script:
+    - echo "🚀 Deploying $CI_COMMIT_SHORT_SHA to production..."
+    - echo "✅ Deployed to production."
+  environment:
+    name: production
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
