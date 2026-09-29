@@ -1,4 +1,4 @@
-# DevOps Insights 
+# DevOps Insights
 
 App Dynatrace que complementa o app oficial [**Community CI/CD Observability**](https://www.dynatrace.com/hub/detail/community-cicd-observability/), oferecendo visões adicionais sobre **PRs/MRs abertos**, **contribuidores** e **insights** de produtividade. Todo o dado vem dos **SDLC events ingeridos no Grail** — pela mesma config de webhook que alimenta o app da comunidade. **Zero mock data**: o que aparece é o que está no Grail.
 
